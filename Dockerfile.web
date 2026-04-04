@@ -1,0 +1,33 @@
+# syntax=docker/dockerfile:1
+# Builds the React frontend and serves it via nginx
+FROM node:20-slim AS base
+RUN npm install -g pnpm
+WORKDIR /app
+
+# ── deps stage ────────────────────────────────────────────────────────────────
+FROM base AS deps
+COPY pnpm-workspace.yaml pnpm-lock.yaml package.json ./
+COPY packages/shared/package.json ./packages/shared/
+# Desktop package — we only need its node_modules for the build
+COPY apps/desktop/package.json ./apps/desktop/
+RUN pnpm install --frozen-lockfile --filter @local-assistant/desktop --filter @local-assistant/shared
+
+# ── build stage ───────────────────────────────────────────────────────────────
+FROM deps AS build
+ARG VITE_BACKEND_URL=http://localhost:3001
+ARG VITE_WS_URL=ws://localhost:3001
+
+COPY packages/shared ./packages/shared
+COPY apps/desktop ./apps/desktop
+
+# Build shared (ESM) first, then Vite bundle
+RUN pnpm --filter @local-assistant/shared build
+RUN VITE_BACKEND_URL=${VITE_BACKEND_URL} VITE_WS_URL=${VITE_WS_URL} \
+    pnpm --filter @local-assistant/desktop build
+
+# ── serve stage ───────────────────────────────────────────────────────────────
+FROM nginx:1.27-alpine AS runtime
+COPY --from=build /app/apps/desktop/dist /usr/share/nginx/html
+COPY docker/nginx.conf /etc/nginx/conf.d/default.conf
+EXPOSE 80
+CMD ["nginx", "-g", "daemon off;"]

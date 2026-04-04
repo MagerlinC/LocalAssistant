@@ -1,0 +1,62 @@
+name: local-assistant
+
+# ─────────────────────────────────────────────────────────────────────────────
+# Usage:
+#
+#   Web mode (browser):
+#     docker compose --profile web up
+#     Open http://localhost:8080
+#
+#   Tauri mode (desktop window):
+#     docker compose --profile tauri up      # starts backend only
+#     pnpm --filter @local-assistant/desktop tauri dev
+#
+# In both modes Ollama must be running on the host at port 11434.
+# On Linux, set OLLAMA_URL=http://172.17.0.1:11434 in a .env file if
+# host.docker.internal is not available.
+# ─────────────────────────────────────────────────────────────────────────────
+
+services:
+
+  # ── Backend (Node.js / tRPC) ─────────────────────────────────────────────
+  backend:
+    build:
+      context: .
+      dockerfile: Dockerfile.backend
+    profiles: ["web", "tauri"]
+    restart: unless-stopped
+    environment:
+      PORT: "3001"
+      NODE_ENV: production
+      # Reach the host's Ollama instance. Override with a .env file on Linux.
+      OLLAMA_URL: "${OLLAMA_URL:-http://host.docker.internal:11434}"
+    volumes:
+      # Persist the SQLite DB and indexed chat files on the host
+      - "${LOCAL_ASSISTANT_DATA:-$HOME/LocalAssistant}:/root/LocalAssistant"
+    ports:
+      # Exposed for Tauri mode (desktop app connects directly)
+      - "3001:3001"
+    healthcheck:
+      test: ["CMD", "node", "-e", "fetch('http://localhost:3001/health').then(r=>process.exit(r.ok?0:1))"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 10s
+
+  # ── Frontend (nginx serving the built React app) ──────────────────────────
+  frontend:
+    build:
+      context: .
+      dockerfile: Dockerfile.web
+      args:
+        # In web mode nginx proxies /trpc → backend, so the browser only needs
+        # to talk to itself (same origin). No CORS, no exposed 3001 needed.
+        VITE_BACKEND_URL: ""
+        VITE_WS_URL: ""
+    profiles: ["web"]
+    restart: unless-stopped
+    ports:
+      - "${WEB_PORT:-8080}:80"
+    depends_on:
+      backend:
+        condition: service_healthy

@@ -1,0 +1,44 @@
+name: local-assistant
+
+# ─────────────────────────────────────────────────────────────────────────────
+# Development overrides — hot-reload for both backend and frontend.
+#
+#   Web dev mode:
+#     docker compose -f docker-compose.yml -f docker-compose.dev.yml \
+#       --profile web up
+#     Open http://localhost:1420
+#
+#   Tauri dev mode:
+#     docker compose -f docker-compose.yml -f docker-compose.dev.yml \
+#       --profile tauri up
+#     pnpm --filter @local-assistant/desktop tauri dev
+# ─────────────────────────────────────────────────────────────────────────────
+
+services:
+
+  backend:
+    build:
+      context: .
+      dockerfile: Dockerfile.backend.dev
+    environment:
+      NODE_ENV: development
+    volumes:
+      - ./packages/shared:/app/packages/shared
+      - ./packages/backend:/app/packages/backend
+      # Keep node_modules inside the container
+      - /app/node_modules
+      - /app/packages/shared/node_modules
+      - /app/packages/backend/node_modules
+      - "${LOCAL_ASSISTANT_DATA:-$HOME/LocalAssistant}:/root/LocalAssistant"
+
+  frontend:
+    build:
+      context: .
+      dockerfile: Dockerfile.web.dev
+    ports:
+      - "1420:1420"
+    volumes:
+      - ./packages/shared:/app/packages/shared
+      - ./apps/desktop:/app/apps/desktop
+      - /app/node_modules
+      - /app/apps/desktop/node_modules

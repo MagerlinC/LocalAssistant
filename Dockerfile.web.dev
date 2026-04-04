@@ -1,0 +1,21 @@
+# syntax=docker/dockerfile:1
+# Development frontend — Vite dev server with HMR
+FROM node:20-slim
+RUN npm install -g pnpm
+WORKDIR /app
+
+COPY pnpm-workspace.yaml pnpm-lock.yaml package.json ./
+COPY packages/shared/package.json ./packages/shared/
+COPY apps/desktop/package.json ./apps/desktop/
+RUN pnpm install --frozen-lockfile --filter @local-assistant/desktop --filter @local-assistant/shared
+
+# In dev (docker) mode, the frontend talks directly to the backend container
+# via the docker network name "backend:3001" resolved through nginx is not
+# available here — instead we expose the backend on 3001 and the browser
+# (running on the host) hits localhost:3001 and localhost:1420 directly.
+ENV VITE_BACKEND_URL=http://localhost:3001
+ENV VITE_WS_URL=ws://localhost:3001
+
+EXPOSE 1420
+
+CMD ["pnpm", "--filter", "@local-assistant/desktop", "dev", "--", "--host", "0.0.0.0"]

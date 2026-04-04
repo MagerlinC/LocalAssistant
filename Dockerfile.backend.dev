@@ -1,0 +1,23 @@
+# syntax=docker/dockerfile:1
+# Development backend — uses tsx watch for hot reload, no build step
+FROM node:20-slim
+RUN npm install -g pnpm
+WORKDIR /app
+
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    python3 make g++ \
+    && rm -rf /var/lib/apt/lists/*
+
+COPY pnpm-workspace.yaml pnpm-lock.yaml package.json ./
+COPY packages/shared/package.json ./packages/shared/
+COPY packages/backend/package.json ./packages/backend/
+RUN pnpm install --frozen-lockfile --filter @local-assistant/backend --filter @local-assistant/shared
+
+ENV PORT=3001
+ENV NODE_ENV=development
+ENV OLLAMA_URL=http://host.docker.internal:11434
+
+EXPOSE 3001
+
+# tsx watch re-runs on any source change (volumes mounted from host)
+CMD ["pnpm", "--filter", "@local-assistant/backend", "dev"]
