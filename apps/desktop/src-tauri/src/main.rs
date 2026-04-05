@@ -1,61 +1,128 @@
 // Prevents additional console window on Windows in release, DO NOT REMOVE!!
 #![cfg_attr(not(debug_assertions), windows_subsystem = "windows")]
 
+use std::net::TcpStream;
 use std::path::PathBuf;
-use std::process::{Child, Command};
 use std::sync::Mutex;
+use std::time::{Duration, Instant};
+use tauri::api::process::{Command, CommandChild};
 use tauri::{Manager, State};
 
-struct BackendProcess(Mutex<Option<Child>>);
+// ── Managed state ─────────────────────────────────────────────────────────────
 
-/// Returns the chat files folder path and ensures it exists.
-fn chat_files_dir(chat_id: &str) -> Result<PathBuf, String> {
+struct ProcessManager {
+    backend: Mutex<Option<CommandChild>>,
+    ollama:  Mutex<Option<CommandChild>>,
+}
+
+impl ProcessManager {
+    fn new() -> Self {
+        Self {
+            backend: Mutex::new(None),
+            ollama:  Mutex::new(None),
+        }
+    }
+
+    fn kill_all(&self) {
+        if let Ok(mut g) = self.backend.lock() {
+            if let Some(c) = g.take() { let _ = c.kill(); }
+        }
+        if let Ok(mut g) = self.ollama.lock() {
+            if let Some(c) = g.take() { let _ = c.kill(); }
+        }
+    }
+}
+
+// ── Port helpers ──────────────────────────────────────────────────────────────
+
+fn port_open(port: u16) -> bool {
+    TcpStream::connect(format!("127.0.0.1:{}", port)).is_ok()
+}
+
+fn wait_for_port(port: u16, timeout_ms: u64) -> bool {
+    let deadline = Instant::now() + Duration::from_millis(timeout_ms);
+    while Instant::now() < deadline {
+        if port_open(port) { return true; }
+        std::thread::sleep(Duration::from_millis(150));
+    }
+    false
+}
+
+// ── Data directory ────────────────────────────────────────────────────────────
+
+fn resolve_data_dir(app: &tauri::App) -> PathBuf {
+    // Tauri resolves to:
+    //   macOS  → ~/Library/Application Support/<identifier>
+    //   Windows → %APPDATA%\<identifier>
+    if let Some(dir) = app.path_resolver().app_data_dir() {
+        let _ = std::fs::create_dir_all(&dir);
+        return dir;
+    }
     let home = std::env::var("HOME")
         .or_else(|_| std::env::var("USERPROFILE"))
-        .map_err(|_| "Could not determine home directory".to_string())?;
-    let dir: PathBuf = [&home, "LocalAssistant", "chats", chat_id, "files"]
-        .iter()
-        .collect();
-    std::fs::create_dir_all(&dir)
-        .map_err(|e| format!("Failed to create chat folder: {e}"))?;
+        .unwrap_or_else(|_| ".".into());
+    let dir = PathBuf::from(home).join("LocalAssistant");
+    let _ = std::fs::create_dir_all(&dir);
+    dir
+}
+
+// ── Chat file helpers (used by Tauri commands) ────────────────────────────────
+
+fn chat_files_dir(app_handle: &tauri::AppHandle, chat_id: &str) -> Result<PathBuf, String> {
+    let base = app_handle
+        .path_resolver()
+        .app_data_dir()
+        .ok_or_else(|| "Could not determine app data dir".to_string())?;
+    let dir = base.join("chats").join(chat_id).join("files");
+    std::fs::create_dir_all(&dir).map_err(|e| format!("Failed to create chat folder: {e}"))?;
     Ok(dir)
 }
 
-/// Opens the chat files folder in the OS file manager (Finder on macOS).
-/// Creates the folder first if it doesn't exist.
+// ── Tauri commands ────────────────────────────────────────────────────────────
+
 #[tauri::command]
-fn open_chat_folder(chat_id: String) -> Result<(), String> {
-    let dir = chat_files_dir(&chat_id)?;
+fn get_data_dir(app_handle: tauri::AppHandle) -> String {
+    app_handle
+        .path_resolver()
+        .app_data_dir()
+        .unwrap_or_else(|| {
+            let home = std::env::var("HOME")
+                .or_else(|_| std::env::var("USERPROFILE"))
+                .unwrap_or_else(|_| ".".into());
+            PathBuf::from(home).join("LocalAssistant")
+        })
+        .to_string_lossy()
+        .into_owned()
+}
+
+#[tauri::command]
+fn open_chat_folder(chat_id: String, app_handle: tauri::AppHandle) -> Result<(), String> {
+    let dir = chat_files_dir(&app_handle, &chat_id)?;
 
     #[cfg(target_os = "macos")]
-    std::process::Command::new("open")
-        .arg(&dir)
-        .spawn()
+    std::process::Command::new("open").arg(&dir).spawn()
         .map_err(|e| format!("Failed to open folder: {e}"))?;
 
     #[cfg(target_os = "windows")]
-    std::process::Command::new("explorer")
-        .arg(&dir)
-        .spawn()
+    std::process::Command::new("explorer").arg(&dir).spawn()
         .map_err(|e| format!("Failed to open folder: {e}"))?;
 
     #[cfg(target_os = "linux")]
-    std::process::Command::new("xdg-open")
-        .arg(&dir)
-        .spawn()
+    std::process::Command::new("xdg-open").arg(&dir).spawn()
         .map_err(|e| format!("Failed to open folder: {e}"))?;
 
     Ok(())
 }
 
-/// Copies a list of host file paths into ~/LocalAssistant/chats/{chat_id}/files/.
-/// Running this on the Rust side means it always uses the host filesystem,
-/// regardless of whether the Node.js backend is local or inside Docker.
 #[tauri::command]
-fn copy_files_to_chat(files: Vec<String>, chat_id: String) -> Result<Vec<String>, String> {
-    let dest_dir = chat_files_dir(&chat_id)?;
+fn copy_files_to_chat(
+    files: Vec<String>,
+    chat_id: String,
+    app_handle: tauri::AppHandle,
+) -> Result<Vec<String>, String> {
+    let dest_dir = chat_files_dir(&app_handle, &chat_id)?;
+    let mut copied = Vec::new();
 
-    let mut copied: Vec<String> = Vec::new();
     for file_path in &files {
         let src = PathBuf::from(file_path);
         let filename = src
@@ -70,33 +137,70 @@ fn copy_files_to_chat(files: Vec<String>, chat_id: String) -> Result<Vec<String>
     Ok(copied)
 }
 
+// ── main ──────────────────────────────────────────────────────────────────────
+
 fn main() {
     tauri::Builder::default()
-        .manage(BackendProcess(Mutex::new(None)))
-        .invoke_handler(tauri::generate_handler![copy_files_to_chat, open_chat_folder])
+        .manage(ProcessManager::new())
+        .invoke_handler(tauri::generate_handler![
+            copy_files_to_chat,
+            open_chat_folder,
+            get_data_dir,
+        ])
         .setup(|app| {
-            let backend_state: State<BackendProcess> = app.state();
+            // In debug builds (tauri dev) the Docker/npm backend is already
+            // running — skip sidecar launch entirely.
+            #[cfg(not(debug_assertions))]
+            {
+                let data_dir = resolve_data_dir(app);
+                let data_dir_str = data_dir.to_string_lossy().into_owned();
+                let pm: State<ProcessManager> = app.state();
 
-            let backend_path = {
-                let resource_dir = app
-                    .path_resolver()
-                    .resource_dir()
-                    .expect("failed to get resource dir");
-                resource_dir.join("backend").join("dist").join("index.js")
-            };
+                // ── 1. Ollama ────────────────────────────────────────────
+                if !port_open(11434) {
+                    match Command::new_sidecar("ollama") {
+                        Err(e) => eprintln!("[LocalAssistant] ollama sidecar not found: {e}"),
+                        Ok(cmd) => match cmd.args(["serve"]).spawn() {
+                            Err(e) => eprintln!("[LocalAssistant] Failed to start ollama: {e}"),
+                            Ok((_rx, child)) => {
+                                *pm.ollama.lock().unwrap() = Some(child);
+                                if !wait_for_port(11434, 15_000) {
+                                    eprintln!("[LocalAssistant] Ollama did not become ready in 15 s");
+                                }
+                            }
+                        },
+                    }
+                }
 
-            let child = if backend_path.exists() {
-                Command::new("node")
-                    .arg(&backend_path)
-                    .env("PORT", "3001")
-                    .spawn()
-                    .ok()
-            } else {
-                None
-            };
+                // ── 2. Backend ───────────────────────────────────────────
+                match Command::new_sidecar("backend") {
+                    Err(e) => eprintln!("[LocalAssistant] backend sidecar not found: {e}"),
+                    Ok(cmd) => match cmd
+                        .env("PORT", "3001")
+                        .env("DATA_DIR", &data_dir_str)
+                        .env("OLLAMA_URL", "http://localhost:11434")
+                        .spawn()
+                    {
+                        Err(e) => eprintln!("[LocalAssistant] Failed to start backend: {e}"),
+                        Ok((_rx, child)) => {
+                            *pm.backend.lock().unwrap() = Some(child);
+                        }
+                    },
+                }
 
-            *backend_state.0.lock().unwrap() = child;
+                // ── 3. Wait for backend ──────────────────────────────────
+                if !wait_for_port(3001, 20_000) {
+                    eprintln!("[LocalAssistant] Backend did not become ready in 20 s");
+                }
+            }
+
             Ok(())
+        })
+        .on_window_event(|event| {
+            if let tauri::WindowEvent::Destroyed = event.event() {
+                let pm: State<ProcessManager> = event.window().app_handle().state();
+                pm.kill_all();
+            }
         })
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

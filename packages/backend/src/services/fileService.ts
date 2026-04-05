@@ -8,7 +8,9 @@ import { ollamaEmbed, vectorToBuffer, bufferToVector, cosineSimilarity } from '.
 import { log } from '../lib/logger';
 import type { FileRecord } from '@local-assistant/shared';
 
-const BASE_DIR = path.join(os.homedir(), 'LocalAssistant', 'chats');
+const BASE_DIR = process.env.DATA_DIR
+  ? path.join(process.env.DATA_DIR, 'chats')
+  : path.join(os.homedir(), 'LocalAssistant', 'chats');
 
 export function getChatFilesDir(chatId: string): string {
   return path.join(BASE_DIR, chatId, 'files');

@@ -1,152 +1,72 @@
 # LocalAssistant
 
-A local-first AI desktop/web assistant that analyzes office files using a locally running Ollama LLM.
+A local-first AI desktop assistant. Runs fully offline using Ollama — no cloud, no telemetry.
 
 ## Prerequisites
 
-- **Ollama** running on the host at port `11434`
-- A model pulled, e.g.: `ollama pull qwen2.5:7b`
-
-| Mode | Docker | pnpm | Rust |
-|------|:------:|:----:|:----:|
-| Web (browser) | ✅ required | — | — |
-| Tauri (native window) | optional | ✅ required | ✅ required |
-| Fully local | — | ✅ required | ✅ required |
-
-> **Rust is only needed if you want a native desktop window.** Tauri compiles to a
-> native binary for your OS — that step cannot happen inside a container.
-> If you just want to run the app, use web mode.
+- [Node.js](https://nodejs.org) + [pnpm](https://pnpm.io) (`npm i -g pnpm`)
+- [Rust](https://rustup.rs) (for Tauri)
+- [Docker](https://www.docker.com) (for the dev backend)
+- Ollama running locally at port `11434`
 
 ---
 
-## Running Modes
-
-### 1. Web mode — fully containerised, no Rust needed
-
-Everything runs in Docker. Open your browser, no Rust or pnpm install required.
+## Development
 
 ```bash
-docker compose --profile web up --build
-# → open http://localhost:8080
-```
-
-To change the port: `WEB_PORT=3000 docker compose --profile web up`
-
----
-
-### 2. Tauri desktop mode — native window (requires Rust locally)
-
-The backend runs in Docker but the native window compiles and runs on your machine,
-so **Rust must be installed locally**:
-
-```bash
-curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh
-source ~/.cargo/env
-```
-
-Then:
-
-```bash
-# Terminal 1 — start the containerised backend
-docker compose --profile tauri up --build
-
-# Terminal 2 — compile and open the native desktop window
 pnpm install
 pnpm --filter @local-assistant/shared build
+
+# Terminal 1 — backend (Docker)
+docker compose --profile tauri up --build
+
+# Terminal 2 — desktop window (hot reload)
 pnpm --filter @local-assistant/desktop tauri dev
 ```
 
+The app talks to the Dockerised backend at `http://localhost:3001`.
+
 ---
 
-### 3. Dev mode — hot reload, everything in Docker
+## Building a distributable app
+
+The release build bundles the backend and Ollama as self-contained sidecars.
+
+### 1. Build the backend binary
 
 ```bash
-docker compose \
-  -f docker-compose.yml \
-  -f docker-compose.dev.yml \
-  --profile web up --build
-# → open http://localhost:1420
+pnpm build:backend-binary        # current platform
+pnpm build:backend-binary:all    # all platforms (macOS arm64/x64, Windows x64)
 ```
 
-Backend (tsx watch) and frontend (Vite HMR) both reload on file changes
-because the source directories are volume-mounted into the containers.
-
----
-
-### 4. Fully local (no Docker)
+### 2. Download the Ollama binary
 
 ```bash
-pnpm install
-pnpm --filter @local-assistant/shared build
-
-# Terminal 1
-pnpm --filter @local-assistant/backend dev
-
-# Terminal 2
-pnpm --filter @local-assistant/desktop dev   # browser at http://localhost:1420
-# or
-pnpm --filter @local-assistant/desktop tauri dev   # native window
+pnpm download:ollama             # current platform
+pnpm download:ollama:all         # all platforms
 ```
 
----
-
-## Ollama on Linux
-
-`host.docker.internal` is not available by default on Linux. Either:
+### 3. Build the Tauri app
 
 ```bash
-# Option A — .env file
-echo "OLLAMA_URL=http://172.17.0.1:11434" > .env
-
-# Option B — expose Ollama on all interfaces
-OLLAMA_HOST=0.0.0.0 ollama serve
+pnpm --filter @local-assistant/desktop tauri build
 ```
+
+Or run all three steps at once:
+
+```bash
+pnpm build:dist
+```
+
+The output installer is written to `apps/desktop/src-tauri/target/release/bundle/`.
 
 ---
 
-## Data Storage
-
-| Path | Contents |
-|------|----------|
-| `~/LocalAssistant/local-assistant.db` | SQLite database |
-| `~/LocalAssistant/chats/{chatId}/files/` | Drop files here to index them |
-
-The Docker backend mounts `~/LocalAssistant` from the host, so data persists
-between container restarts and is shared with the Tauri app.
-
----
-
-## File Support
-
-`.pdf` · `.docx` · `.xlsx` / `.xls` · `.pptx` · `.txt` · `.md` · `.csv`
-
----
-
-## Architecture
+## Project layout
 
 ```
-docker-compose.yml          production compose (profiles: web, tauri)
-docker-compose.dev.yml      dev overrides (hot reload)
-Dockerfile.backend          production backend image
-Dockerfile.backend.dev      dev backend image (tsx watch)
-Dockerfile.web              nginx + built React app
-Dockerfile.web.dev          Vite dev server
-docker/nginx.conf           nginx: SPA + /trpc proxy + WS upgrade
-
-apps/desktop/               Tauri shell + React/Mantine frontend
-packages/backend/           Node.js tRPC server + RAG pipeline
-packages/shared/            Shared TypeScript types (dual CJS/ESM)
-```
-
-**Data flow in web mode:**
-
-```
-Browser → nginx :80 → /trpc → backend :3001 → SQLite + Ollama
-                    ↗ WebSocket upgrade (streaming)
-```
-
-**Data flow in Tauri mode:**
-
-```
-Tauri window → backend :3001 (Docker) → SQLite + Ollama
+apps/desktop/        Tauri shell + React/Mantine frontend
+packages/backend/    Node.js tRPC server + RAG pipeline
+packages/shared/     Shared TypeScript types
+scripts/             Build helpers (download-ollama, etc.)
 ```

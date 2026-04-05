@@ -1,3 +1,40 @@
+import path from 'path';
+import os from 'os';
+import fs from 'fs';
+
+// ── pkg native-module bootstrap ─────────────────────────────────────────────
+// Must run before getDb() is first called.
+// When bundled with @yao-pkg/pkg the better_sqlite3.node asset lives inside
+// the snapshot virtual FS.  dlopen() needs a real filesystem path, so we copy
+// it out to $TMPDIR on first launch.
+if ((process as any).pkg) {
+  try {
+    const bindingDir = path.join(os.tmpdir(), 'localassistant-native');
+    fs.mkdirSync(bindingDir, { recursive: true });
+    const dest = path.join(bindingDir, 'better_sqlite3.node');
+    if (!fs.existsSync(dest)) {
+      // __dirname inside a pkg snapshot resolves to the dist/ snapshot dir.
+      // The asset was included relative to the project root so it lives one
+      // level up at node_modules/better-sqlite3/build/Release/.
+      const src = path.join(
+        __dirname,
+        '..',
+        'node_modules',
+        'better-sqlite3',
+        'build',
+        'Release',
+        'better_sqlite3.node'
+      );
+      const data = fs.readFileSync(src);  // reads from pkg virtual FS
+      fs.writeFileSync(dest, data);       // writes to real FS
+    }
+    process.env.BETTER_SQLITE3_NATIVE_BINDING = dest;
+  } catch (e) {
+    console.error('Warning: could not extract native binding:', e);
+  }
+}
+// ────────────────────────────────────────────────────────────────────────────
+
 import express from 'express';
 import cors from 'cors';
 import { createExpressMiddleware } from '@trpc/server/adapters/express';
@@ -9,7 +46,7 @@ import { getDb } from './db/schema';
 
 const PORT = parseInt(process.env.PORT ?? '3001', 10);
 
-// Initialize DB
+// Initialize DB (uses BETTER_SQLITE3_NATIVE_BINDING if set above)
 getDb();
 
 const app = express();
@@ -42,8 +79,8 @@ applyWSSHandler({
 });
 
 server.listen(PORT, () => {
-  console.log(`LocalAssistant backend running on http://localhost:${PORT}`);
-  console.log(`WebSocket ready on ws://localhost:${PORT}/trpc`);
+  process.stderr.write(`LocalAssistant backend running on http://localhost:${PORT}\n`);
+  process.stderr.write(`WebSocket ready on ws://localhost:${PORT}/trpc\n`);
 });
 
 process.on('SIGTERM', () => {

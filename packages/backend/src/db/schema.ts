@@ -3,7 +3,17 @@ import path from 'path';
 import os from 'os';
 import fs from 'fs';
 
-const DATA_DIR = path.join(os.homedir(), 'LocalAssistant');
+function getDataDir(): string {
+  if (process.env.DATA_DIR) return process.env.DATA_DIR;
+  // Fallback for dev: ~/LocalAssistant
+  return path.join(os.homedir(), 'LocalAssistant');
+}
+
+export function getDataDirPath(): string {
+  return getDataDir();
+}
+
+const DATA_DIR = getDataDir();
 const DB_PATH = path.join(DATA_DIR, 'local-assistant.db');
 
 fs.mkdirSync(DATA_DIR, { recursive: true });
@@ -13,7 +23,14 @@ let _db: Database.Database | null = null;
 export function getDb(): Database.Database {
   if (_db) return _db;
 
-  _db = new Database(DB_PATH);
+  const opts: Database.Options = {};
+  // When running as a pkg binary, the native binding is extracted to a temp dir.
+  // The startup code in index.ts sets this env var before getDb() is first called.
+  if (process.env.BETTER_SQLITE3_NATIVE_BINDING) {
+    opts.nativeBinding = process.env.BETTER_SQLITE3_NATIVE_BINDING;
+  }
+
+  _db = new Database(DB_PATH, opts);
   _db.pragma('journal_mode = WAL');
   _db.pragma('foreign_keys = ON');
 
@@ -73,4 +90,5 @@ function initSchema(db: Database.Database) {
   `);
 }
 
+// Keep the old export name for backwards compat
 export const DATA_DIR_PATH = DATA_DIR;

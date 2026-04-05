@@ -5,7 +5,8 @@
   "scripts": {
     "dev": "tsx watch src/index.ts",
     "build": "tsc",
-    "start": "node dist/index.js"
+    "start": "node dist/index.js",
+    "build:binary": "node scripts/build-binary.mjs"
   },
   "dependencies": {
     "@local-assistant/shared": "workspace:*",
@@ -29,6 +30,7 @@
     "@types/pdf-parse": "^1.1.4",
     "@types/uuid": "^10.0.0",
     "@types/ws": "^8.5.10",
+    "@yao-pkg/pkg": "^5.12.1",
     "tsx": "^4.8.2",
     "typescript": "^5.4.5"
   }

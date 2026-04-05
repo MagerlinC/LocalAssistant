@@ -14,6 +14,8 @@ interface AppContextValue {
   setAppName: (name: string) => void;
   avatarUrl: string;
   setAvatarUrl: (url: string) => void;
+  setupComplete: boolean;
+  setSetupComplete: (v: boolean) => void;
 }
 
 const AppContext = createContext<AppContextValue | null>(null);
@@ -25,6 +27,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
   const [currentChat, setCurrentChat] = useState<Chat | null>(null);
   const [appName, setAppName] = useState('');
   const [avatarUrl, setAvatarUrl] = useState('');
+  const [setupComplete, setSetupComplete] = useState(false);
 
   const handleSetSelectedChatId = useCallback((id: string | null) => {
     setSelectedChatId(id);
@@ -46,6 +49,8 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
         setAppName,
         avatarUrl,
         setAvatarUrl,
+        setupComplete,
+        setSetupComplete,
       }}
     >
       {children}

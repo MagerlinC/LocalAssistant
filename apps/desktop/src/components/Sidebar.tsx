@@ -96,7 +96,7 @@ export default function Sidebar() {
 
   const utils = trpc.useUtils();
 
-  const { data: chats, isLoading } = trpc.chat.getChats.useQuery();
+  const { data: chats = [], isLoading } = trpc.chat.getChats.useQuery();
   const { data: models, refetch: refetchModels } =
     trpc.chat.getModels.useQuery();
   const { data: savedDefaultPrompt } =
@@ -238,6 +238,24 @@ export default function Sidebar() {
     pullUnsubRef.current = sub;
   }
 
+  const chatsGroupedByDate = chats.reduce(
+    (groups, chat) => {
+      const dateKey = new Date(chat.createdAt).toLocaleDateString();
+      if (!groups[dateKey]) groups[dateKey] = [];
+      groups[dateKey].push(chat);
+      return groups;
+    },
+    {} as Record<string, typeof chats>,
+  );
+
+  const dateKeys = Object.keys(chatsGroupedByDate).sort((a, b) => {
+    const dateA = new Date(a);
+    const dateB = new Date(b);
+    if (dateA > dateB) return -1;
+    if (dateA < dateB) return 1;
+    return 0;
+  });
+
   return (
     <>
       <Stack h="100%" gap={0}>
@@ -261,33 +279,41 @@ export default function Sidebar() {
               <Loader size="sm" />
             </Group>
           )}
-          {chats?.map((chat) => (
-            <NavLink
-              key={chat.id}
-              label={
-                <Group justify="space-between" wrap="nowrap">
-                  <Text size="sm" truncate flex={1}>
-                    {chat.name}
-                  </Text>
-                  <ActionIcon
-                    size="xs"
-                    variant="subtle"
-                    color="red"
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      deleteChat.mutate({ chatId: chat.id });
-                    }}
-                  >
-                    <IconTrash size={12} />
-                  </ActionIcon>
-                </Group>
-              }
-              leftSection={<IconMessage size={14} />}
-              active={selectedChatId === chat.id}
-              onClick={() => handleSelectChat(chat.id)}
-              style={{ borderRadius: 6 }}
-            />
+          {dateKeys.map((dateKey) => (
+            <div key={dateKey}>
+              <Text size="xs" c="dimmed" mt="md" mb="xs" px="xs">
+                {dateKey}
+              </Text>
+              {chatsGroupedByDate[dateKey].map((chat) => (
+                <NavLink
+                  key={chat.id}
+                  label={
+                    <Group justify="space-between" wrap="nowrap">
+                      <Text size="sm" truncate flex={1}>
+                        {chat.name}
+                      </Text>
+                      <ActionIcon
+                        size="xs"
+                        variant="subtle"
+                        color="red"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          deleteChat.mutate({ chatId: chat.id });
+                        }}
+                      >
+                        <IconTrash size={12} />
+                      </ActionIcon>
+                    </Group>
+                  }
+                  leftSection={<IconMessage size={14} />}
+                  active={selectedChatId === chat.id}
+                  onClick={() => handleSelectChat(chat.id)}
+                  style={{ borderRadius: 6 }}
+                />
+              ))}
+            </div>
           ))}
+
           {!isLoading && chats?.length === 0 && (
             <Text size="xs" c="dimmed" ta="center" p="md">
               No chats yet
@@ -357,13 +383,22 @@ export default function Sidebar() {
           {/* ── Assistant tab ── */}
           <Tabs.Panel value="assistant">
             <Stack>
-              <Text size="sm" fw={600} c="dimmed">Personality</Text>
+              <Text size="sm" fw={600} c="dimmed">
+                Personality
+              </Text>
 
               <Group align="flex-start" justify="center" gap="md">
                 <Box>
                   <Tooltip label="Click to change avatar">
-                    <UnstyledButton onClick={() => avatarInputRef.current?.click()}>
-                      <Box style={{ position: "relative", display: "inline-block" }}>
+                    <UnstyledButton
+                      onClick={() => avatarInputRef.current?.click()}
+                    >
+                      <Box
+                        style={{
+                          position: "relative",
+                          display: "inline-block",
+                        }}
+                      >
                         <Avatar
                           src={draftAvatar || null}
                           size={64}
@@ -424,7 +459,9 @@ export default function Sidebar() {
 
               <Divider />
 
-              <Text size="sm" fw={600} c="dimmed">Default system prompt</Text>
+              <Text size="sm" fw={600} c="dimmed">
+                Default system prompt
+              </Text>
               <Textarea
                 description="Used for all new chats unless overridden per-chat"
                 value={defaultPrompt}
@@ -435,7 +472,9 @@ export default function Sidebar() {
 
               <Button
                 onClick={handleSaveSettings}
-                loading={setDefaultSystemPrompt.isPending || setAppSettings.isPending}
+                loading={
+                  setDefaultSystemPrompt.isPending || setAppSettings.isPending
+                }
               >
                 Save
               </Button>
@@ -445,7 +484,9 @@ export default function Sidebar() {
           {/* ── Models tab ── */}
           <Tabs.Panel value="models">
             <Stack>
-              <Text size="sm" fw={600} c="dimmed">Installed models</Text>
+              <Text size="sm" fw={600} c="dimmed">
+                Installed models
+              </Text>
 
               <Stack gap="xs">
                 {models && models.length > 0 ? (
@@ -458,15 +499,20 @@ export default function Sidebar() {
                     </Group>
                   ))
                 ) : (
-                  <Text size="xs" c="dimmed">No models installed</Text>
+                  <Text size="xs" c="dimmed">
+                    No models installed
+                  </Text>
                 )}
               </Stack>
 
               <Divider />
 
-              <Text size="sm" fw={600} c="dimmed">Pull a model</Text>
+              <Text size="sm" fw={600} c="dimmed">
+                Pull a model
+              </Text>
               <Text size="xs" c="dimmed">
-                Find model names at ollama.com/library (e.g. llama3.2:3b, mistral, nomic-embed-text)
+                Find model names at ollama.com/library (e.g. llama3.2:3b,
+                mistral, nomic-embed-text)
               </Text>
 
               <Group gap="xs">
@@ -491,7 +537,9 @@ export default function Sidebar() {
 
               {isPulling && (
                 <Stack gap={4}>
-                  <Text size="xs" c="dimmed" truncate>{pullStatus}</Text>
+                  <Text size="xs" c="dimmed" truncate>
+                    {pullStatus}
+                  </Text>
                   <Progress
                     value={pullPercent ?? 0}
                     animated={pullPercent === undefined}
