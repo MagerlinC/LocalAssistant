@@ -135,7 +135,7 @@ export default function SetupWizard() {
         {step === 'identity' && (
           <Stack gap="lg">
             <Group gap="sm">
-              <ThemeIcon color="violet" variant="light" size="lg" radius="md">
+              <ThemeIcon color="primary" variant="light" size="lg" radius="md">
                 <IconBrain size={22} />
               </ThemeIcon>
               <Box>
@@ -150,7 +150,7 @@ export default function SetupWizard() {
                 <Tooltip label="Click to upload">
                   <UnstyledButton onClick={() => avatarInputRef.current?.click()}>
                     <Box style={{ position: 'relative', display: 'inline-block' }}>
-                      <Avatar src={avatar || null} size={64} radius="md" color="violet" variant="light">
+                      <Avatar src={avatar || null} size={64} radius="md" color="primary" variant="light">
                         <IconRobot size={32} />
                       </Avatar>
                       <Box
@@ -215,7 +215,7 @@ export default function SetupWizard() {
         {/* ── pulling ── */}
         {step === 'pulling' && (
           <Stack gap="lg" align="center">
-            <Loader size="lg" color="violet" />
+            <Loader size="lg" color="primary" />
             <Box ta="center">
               <Text fw={600} size="lg">Downloading model</Text>
               <Text size="sm" c="dimmed" mt={4}>
@@ -229,7 +229,7 @@ export default function SetupWizard() {
               </Text>
             )}
             <Progress value={pullPercent ?? 0} animated={pullPercent === undefined}
-              size="md" w="100%" color="violet" />
+              size="md" w="100%" color="primary" />
             {pullError && (
               <Stack gap="xs" w="100%">
                 <Text size="sm" c="red">{pullError}</Text>

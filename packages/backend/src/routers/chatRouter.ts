@@ -117,14 +117,22 @@ export const chatRouter = router({
     return {
       appName: chatService.getSetting('appName') ?? '',
       avatarDataUrl: chatService.getSetting('avatarDataUrl') ?? '',
+      accentColor: chatService.getSetting('accentColor') ?? '',
     };
   }),
 
   setAppSettings: publicProcedure
-    .input(z.object({ appName: z.string(), avatarDataUrl: z.string() }))
+    .input(z.object({
+      appName: z.string(),
+      avatarDataUrl: z.string(),
+      accentColor: z.string().optional(),
+    }))
     .mutation(({ input }) => {
       chatService.setSetting('appName', input.appName);
       chatService.setSetting('avatarDataUrl', input.avatarDataUrl);
+      if (input.accentColor !== undefined) {
+        chatService.setSetting('accentColor', input.accentColor);
+      }
       return { success: true };
     }),
 

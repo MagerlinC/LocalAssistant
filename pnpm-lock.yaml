@@ -13,6 +13,9 @@ importers:
       '@local-assistant/shared':
         specifier: workspace:*
         version: link:../../packages/shared
+      '@mantine/colors-generator':
+        specifier: ^9.0.0
+        version: 9.0.0(chroma-js@3.2.0)
       '@mantine/core':
         specifier: ^7.10.1
         version: 7.17.8(@mantine/hooks@7.17.8(react@18.3.1))(@types/react@18.3.28)(react-dom@18.3.1(react@18.3.1))(react@18.3.1)
@@ -662,6 +665,11 @@ packages:
   '@jridgewell/trace-mapping@0.3.31':
     resolution: {integrity: sha512-zzNR+SdQSDJzc8joaeP8QQoCQr8NuYx2dIIytl1QeBEZHJ9uW6hebsrYgbz8hJwUQao3TWCMtmfV8Nu1twOLAw==}
 
+  '@mantine/colors-generator@9.0.0':
+    resolution: {integrity: sha512-Cg1x9DANm8nuGWRjrVL2zQcuMZnzygQheNyufPzjk58PvPWSLQ93TLwGaEPO8URrNnWT31Qyui16Shy9pdpWJw==}
+    peerDependencies:
+      chroma-js: '>=2.4.2'
+
   '@mantine/core@7.17.8':
     resolution: {integrity: sha512-42sfdLZSCpsCYmLCjSuntuPcDg3PLbakSmmYfz5Auea8gZYLr+8SS5k647doVu0BRAecqYOytkX2QC5/u/8VHw==}
     peerDependencies:
@@ -1193,6 +1201,9 @@ packages:
 
   chownr@1.1.4:
     resolution: {integrity: sha512-jJ0bqzaylmJtVnNgzTeSOs8DPavpbYgEr/b0YL8/2GO3xJEhInFmhKMUnEJQjZumK7KXGFhUy89PrsJWlakBVg==}
+
+  chroma-js@3.2.0:
+    resolution: {integrity: sha512-os/OippSlX1RlWWr+QDPcGUZs0uoqr32urfxESG9U93lhUfbnlyckte84Q8P1UQY/qth983AS1JONKmLS4T0nw==}
 
   cliui@7.0.4:
     resolution: {integrity: sha512-OcRE68cOsVMXp1Yvonl/fzkQOyjLSu/8bhPDfQt0e0/Eb283TKP20Fs2MqoPsr9SwA595rRCA+QMzYc9nBP+JQ==}
@@ -2871,6 +2882,10 @@ snapshots:
       '@jridgewell/resolve-uri': 3.1.2
       '@jridgewell/sourcemap-codec': 1.5.5
 
+  '@mantine/colors-generator@9.0.0(chroma-js@3.2.0)':
+    dependencies:
+      chroma-js: 3.2.0
+
   '@mantine/core@7.17.8(@mantine/hooks@7.17.8(react@18.3.1))(@types/react@18.3.28)(react-dom@18.3.1(react@18.3.1))(react@18.3.1)':
     dependencies:
       '@floating-ui/react': 0.26.28(react-dom@18.3.1(react@18.3.1))(react@18.3.1)
@@ -3377,6 +3392,8 @@ snapshots:
   character-reference-invalid@2.0.1: {}
 
   chownr@1.1.4: {}
+
+  chroma-js@3.2.0: {}
 
   cliui@7.0.4:
     dependencies:

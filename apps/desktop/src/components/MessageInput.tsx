@@ -100,7 +100,7 @@ export default function MessageInput({ chatId, onStreamingChange, onPendingMessa
   }
 
   return (
-    <Box p="md">
+    <Box p="md" className="la-input-area">
       <Group align="flex-end" gap="xs">
         <Textarea
           flex={1}
@@ -128,7 +128,7 @@ export default function MessageInput({ chatId, onStreamingChange, onPendingMessa
           <Tooltip label={isIndexing ? 'Indexing files…' : 'Send (Enter)'}>
             <ActionIcon
               size="lg"
-              color="violet"
+              color="primary"
               variant="filled"
               onClick={handleSend}
               disabled={!input.trim() || blocked}

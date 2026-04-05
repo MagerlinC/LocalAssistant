@@ -57,7 +57,7 @@ export default function ChatView({ chatId }: ChatViewProps) {
             leftSection={<IconFolder size={14} />}
             rightSection={
               files && files.length > 0 ? (
-                <Badge size="xs" variant="filled" color="violet" circle>
+                <Badge size="xs" variant="filled" color="primary" circle>
                   {files.length}
                 </Badge>
               ) : undefined

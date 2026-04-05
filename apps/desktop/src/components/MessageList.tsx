@@ -62,23 +62,17 @@ function MessageBubble({ role, content, isStreaming, avatarUrl }: MessageBubbleP
   return (
     <Group align="flex-start" justify={isUser ? 'flex-end' : 'flex-start'} gap="sm">
       {!isUser && (
-        <Avatar src={avatarUrl || null} size="sm" color="violet" variant="light" radius="sm">
+        <Avatar src={avatarUrl || null} size="sm" color="primary" variant="light" radius="sm">
           <IconRobot size={14} />
         </Avatar>
       )}
       <Paper
         p="sm"
         maw="75%"
-        radius="md"
-        style={isUser ? undefined : {
-          background: 'var(--la-panel-bg)',
-          backdropFilter: 'blur(12px)',
-          WebkitBackdropFilter: 'blur(12px)',
-          border: '1px solid var(--la-border)',
-        }}
-        bg={isUser ? 'violet.9' : undefined}
+        radius="lg"
+        className={isUser ? 'la-bubble-user' : 'la-bubble-assistant'}
       >
-        <Box style={{ fontSize: 14, lineHeight: 1.6, color: isUser ? 'white' : undefined }}>
+        <Box style={{ fontSize: 14, lineHeight: 1.6 }}>
           <ReactMarkdown
             remarkPlugins={[remarkGfm]}
             components={{

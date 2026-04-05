@@ -19,11 +19,11 @@ import {
   Badge,
   Progress,
   Tabs,
+  ColorInput,
 } from "@mantine/core";
 import {
   IconPlus,
   IconTrash,
-  IconSettings,
   IconMessage,
   IconCamera,
   IconRobot,
@@ -66,7 +66,12 @@ function formatModelSize(bytes: number): string {
   return `${(bytes / 1e3).toFixed(0)} KB`;
 }
 
-export default function Sidebar() {
+interface SidebarProps {
+  settingsOpened: boolean;
+  onCloseSettings: () => void;
+}
+
+export default function Sidebar({ settingsOpened, onCloseSettings }: SidebarProps) {
   const {
     selectedChatId,
     setSelectedChatId,
@@ -75,16 +80,19 @@ export default function Sidebar() {
     setAppName,
     avatarUrl,
     setAvatarUrl,
+    accentColor,
+    setAccentColor,
   } = useApp();
   const [newChatOpen, { open: openNewChat, close: closeNewChat }] =
     useDisclosure(false);
-  const [settingsOpen, { open: openSettings, close: closeSettings }] =
-    useDisclosure(false);
+  const settingsOpen = settingsOpened;
+  const closeSettings = onCloseSettings;
   const [newChatName, setNewChatName] = useState("");
   const [newChatModel, setNewChatModel] = useState(DEFAULT_MODEL);
   const [defaultPrompt, setDefaultPrompt] = useState("");
   const [draftName, setDraftName] = useState("");
   const [draftAvatar, setDraftAvatar] = useState("");
+  const [draftAccentColor, setDraftAccentColor] = useState("");
   const avatarInputRef = useRef<HTMLInputElement>(null);
 
   // Model pull state
@@ -110,6 +118,7 @@ export default function Sidebar() {
     if (settingsOpen) {
       setDraftName(appName);
       setDraftAvatar(avatarUrl);
+      setDraftAccentColor(accentColor);
     } else {
       // Cancel any in-progress pull when modal closes
       pullUnsubRef.current?.unsubscribe();
@@ -150,6 +159,7 @@ export default function Sidebar() {
     onSuccess: () => {
       setAppName(draftName);
       setAvatarUrl(draftAvatar);
+      setAccentColor(draftAccentColor);
       notifications.show({ color: "green", message: "Settings saved" });
       closeSettings();
     },
@@ -187,7 +197,11 @@ export default function Sidebar() {
 
   function handleSaveSettings() {
     setDefaultSystemPrompt.mutate({ prompt: defaultPrompt });
-    setAppSettings.mutate({ appName: draftName, avatarDataUrl: draftAvatar });
+    setAppSettings.mutate({
+      appName: draftName,
+      avatarDataUrl: draftAvatar,
+      accentColor: draftAccentColor,
+    });
   }
 
   function handlePullModel() {
@@ -321,16 +335,6 @@ export default function Sidebar() {
           )}
         </ScrollArea>
 
-        <Divider />
-        <Group p="sm" justify="flex-end">
-          <ActionIcon
-            variant="subtle"
-            onClick={openSettings}
-            aria-label="Settings"
-          >
-            <IconSettings size={18} />
-          </ActionIcon>
-        </Group>
       </Stack>
 
       {/* New Chat Modal */}
@@ -378,6 +382,7 @@ export default function Sidebar() {
           <Tabs.List mb="md">
             <Tabs.Tab value="assistant">Assistant</Tabs.Tab>
             <Tabs.Tab value="models">Models</Tabs.Tab>
+            <Tabs.Tab value="appearance">Appearance</Tabs.Tab>
           </Tabs.List>
 
           {/* ── Assistant tab ── */}
@@ -403,7 +408,7 @@ export default function Sidebar() {
                           src={draftAvatar || null}
                           size={64}
                           radius="md"
-                          color="violet"
+                          color="primary"
                           variant="light"
                         >
                           <IconRobot size={32} />
@@ -475,6 +480,35 @@ export default function Sidebar() {
                 loading={
                   setDefaultSystemPrompt.isPending || setAppSettings.isPending
                 }
+              >
+                Save
+              </Button>
+            </Stack>
+          </Tabs.Panel>
+
+          {/* ── Appearance tab ── */}
+          <Tabs.Panel value="appearance">
+            <Stack>
+              <Text size="sm" fw={600} c="dimmed">Accent color</Text>
+              <Text size="xs" c="dimmed">
+                Sets the primary color used throughout the app. Changes take
+                effect after saving.
+              </Text>
+              <ColorInput
+                label="Color"
+                value={draftAccentColor}
+                onChange={setDraftAccentColor}
+                format="hex"
+                swatches={[
+                  '#7950f2', '#e64980', '#f03e3e', '#e67700',
+                  '#2f9e44', '#0c8599', '#1971c2', '#6741d9',
+                ]}
+                swatchesPerRow={8}
+              />
+              <Button
+                onClick={handleSaveSettings}
+                loading={setAppSettings.isPending}
+                mt="xs"
               >
                 Save
               </Button>
