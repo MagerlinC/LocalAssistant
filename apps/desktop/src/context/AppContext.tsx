@@ -10,6 +10,10 @@ interface AppContextValue {
   setIsIndexing: (v: boolean) => void;
   currentChat: Chat | null;
   setCurrentChat: (chat: Chat | null) => void;
+  appName: string;
+  setAppName: (name: string) => void;
+  avatarUrl: string;
+  setAvatarUrl: (url: string) => void;
 }
 
 const AppContext = createContext<AppContextValue | null>(null);
@@ -19,6 +23,8 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
   const [isStreaming, setIsStreaming] = useState(false);
   const [isIndexing, setIsIndexing] = useState(false);
   const [currentChat, setCurrentChat] = useState<Chat | null>(null);
+  const [appName, setAppName] = useState('');
+  const [avatarUrl, setAvatarUrl] = useState('');
 
   const handleSetSelectedChatId = useCallback((id: string | null) => {
     setSelectedChatId(id);
@@ -36,6 +42,10 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
         setIsIndexing,
         currentChat,
         setCurrentChat,
+        appName,
+        setAppName,
+        avatarUrl,
+        setAvatarUrl,
       }}
     >
       {children}

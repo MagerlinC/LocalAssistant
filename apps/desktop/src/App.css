@@ -7,7 +7,52 @@
   box-sizing: border-box;
 }
 
-body {
+html, body, #root {
+  height: 100%;
   margin: 0;
   padding: 0;
+}
+
+/* ── Mesh gradient tokens ───────────────────────── */
+
+/* Dark (default) */
+:root {
+  --la-bg-base:    #0d0d14;
+  --la-panel-bg:   rgba(13, 13, 20, 0.70);
+  --la-header-bg:  rgba(13, 13, 20, 0.80);
+  --la-border:     rgba(139, 92, 246, 0.16);
+}
+
+/* Light */
+[data-mantine-color-scheme='light'] {
+  --la-bg-base:    #f5f3fb;
+  --la-panel-bg:   rgba(248, 246, 255, 0.75);
+  --la-header-bg:  rgba(248, 246, 255, 0.85);
+  --la-border:     rgba(139, 92, 246, 0.14);
+}
+
+/* ── Background ─────────────────────────────────── */
+
+body {
+  background-color: var(--la-bg-base);
+}
+
+/* ── Glass panels ───────────────────────────────── */
+
+.mantine-AppShell-header {
+  background: var(--la-header-bg) !important;
+  backdrop-filter: blur(20px) !important;
+  -webkit-backdrop-filter: blur(20px) !important;
+  border-bottom: 1px solid var(--la-border) !important;
+}
+
+.mantine-AppShell-navbar {
+  background: var(--la-panel-bg) !important;
+  backdrop-filter: blur(16px) !important;
+  -webkit-backdrop-filter: blur(16px) !important;
+  border-right: 1px solid var(--la-border) !important;
+}
+
+.mantine-AppShell-main {
+  background: transparent !important;
 }

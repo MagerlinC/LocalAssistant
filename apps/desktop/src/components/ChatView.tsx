@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { Box, Group, Text, Divider, Tabs } from '@mantine/core';
+import { Box, Group, Text, Divider, Tabs, Badge } from '@mantine/core';
 import { IconMessage, IconFolder, IconSettings } from '@tabler/icons-react';
 import MessageList from './MessageList';
 import MessageInput from './MessageInput';
@@ -18,6 +18,7 @@ export default function ChatView({ chatId }: ChatViewProps) {
   const [streamingContent, setStreamingContent] = useState<string | null>(null);
 
   const { data: chat } = trpc.chat.getChat.useQuery({ chatId }, { enabled: !!chatId });
+  const { data: files } = trpc.chat.getFiles.useQuery({ chatId }, { enabled: !!chatId });
 
   useEffect(() => {
     if (chat) setCurrentChat(chat);
@@ -50,7 +51,17 @@ export default function ChatView({ chatId }: ChatViewProps) {
           <Tabs.Tab value="chat" leftSection={<IconMessage size={14} />}>
             Chat
           </Tabs.Tab>
-          <Tabs.Tab value="files" leftSection={<IconFolder size={14} />}>
+          <Tabs.Tab
+            value="files"
+            leftSection={<IconFolder size={14} />}
+            rightSection={
+              files && files.length > 0 ? (
+                <Badge size="xs" variant="filled" color="violet" circle>
+                  {files.length}
+                </Badge>
+              ) : undefined
+            }
+          >
             Files
           </Tabs.Tab>
           <Tabs.Tab value="settings" leftSection={<IconSettings size={14} />}>

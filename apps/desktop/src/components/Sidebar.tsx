@@ -12,32 +12,113 @@ import {
   NavLink,
   Divider,
   Loader,
-} from '@mantine/core';
-import { IconPlus, IconTrash, IconSettings, IconMessage } from '@tabler/icons-react';
-import { useState, useEffect } from 'react';
-import { useDisclosure } from '@mantine/hooks';
-import { notifications } from '@mantine/notifications';
-import { trpc } from '../lib/trpc';
-import { useApp } from '../context/AppContext';
-import { DEFAULT_MODEL, DEFAULT_SYSTEM_PROMPT } from '@local-assistant/shared';
+  Avatar,
+  Box,
+  UnstyledButton,
+  Tooltip,
+  Badge,
+  Progress,
+  Tabs,
+} from "@mantine/core";
+import {
+  IconPlus,
+  IconTrash,
+  IconSettings,
+  IconMessage,
+  IconCamera,
+  IconRobot,
+  IconDownload,
+} from "@tabler/icons-react";
+import { useState, useEffect, useRef } from "react";
+import { useDisclosure } from "@mantine/hooks";
+import { notifications } from "@mantine/notifications";
+import { trpc, trpcClient } from "../lib/trpc";
+import { useApp } from "../context/AppContext";
+import { DEFAULT_MODEL } from "@local-assistant/shared";
+
+const DEFAULT_APP_NAME = "LocalAssistant";
+
+/** Resize an image File/Blob to a square data URL via canvas. */
+function resizeImageToDataUrl(file: File, size = 128): Promise<string> {
+  return new Promise((resolve, reject) => {
+    const img = new Image();
+    const url = URL.createObjectURL(file);
+    img.onload = () => {
+      URL.revokeObjectURL(url);
+      const canvas = document.createElement("canvas");
+      canvas.width = size;
+      canvas.height = size;
+      const ctx = canvas.getContext("2d")!;
+      const min = Math.min(img.width, img.height);
+      const sx = (img.width - min) / 2;
+      const sy = (img.height - min) / 2;
+      ctx.drawImage(img, sx, sy, min, min, 0, 0, size, size);
+      resolve(canvas.toDataURL("image/png"));
+    };
+    img.onerror = reject;
+    img.src = url;
+  });
+}
+
+function formatModelSize(bytes: number): string {
+  if (bytes >= 1e9) return `${(bytes / 1e9).toFixed(1)} GB`;
+  if (bytes >= 1e6) return `${(bytes / 1e6).toFixed(0)} MB`;
+  return `${(bytes / 1e3).toFixed(0)} KB`;
+}
 
 export default function Sidebar() {
-  const { selectedChatId, setSelectedChatId, setCurrentChat } = useApp();
-  const [newChatOpen, { open: openNewChat, close: closeNewChat }] = useDisclosure(false);
-  const [settingsOpen, { open: openSettings, close: closeSettings }] = useDisclosure(false);
-  const [newChatName, setNewChatName] = useState('');
+  const {
+    selectedChatId,
+    setSelectedChatId,
+    setCurrentChat,
+    appName,
+    setAppName,
+    avatarUrl,
+    setAvatarUrl,
+  } = useApp();
+  const [newChatOpen, { open: openNewChat, close: closeNewChat }] =
+    useDisclosure(false);
+  const [settingsOpen, { open: openSettings, close: closeSettings }] =
+    useDisclosure(false);
+  const [newChatName, setNewChatName] = useState("");
   const [newChatModel, setNewChatModel] = useState(DEFAULT_MODEL);
-  const [defaultPrompt, setDefaultPrompt] = useState('');
+  const [defaultPrompt, setDefaultPrompt] = useState("");
+  const [draftName, setDraftName] = useState("");
+  const [draftAvatar, setDraftAvatar] = useState("");
+  const avatarInputRef = useRef<HTMLInputElement>(null);
+
+  // Model pull state
+  const [pullModelName, setPullModelName] = useState("");
+  const [isPulling, setIsPulling] = useState(false);
+  const [pullStatus, setPullStatus] = useState("");
+  const [pullPercent, setPullPercent] = useState<number | undefined>(undefined);
+  const pullUnsubRef = useRef<{ unsubscribe: () => void } | null>(null);
 
   const utils = trpc.useUtils();
 
   const { data: chats, isLoading } = trpc.chat.getChats.useQuery();
-  const { data: models } = trpc.chat.getModels.useQuery();
-  const { data: savedDefaultPrompt } = trpc.chat.getDefaultSystemPrompt.useQuery();
+  const { data: models, refetch: refetchModels } =
+    trpc.chat.getModels.useQuery();
+  const { data: savedDefaultPrompt } =
+    trpc.chat.getDefaultSystemPrompt.useQuery();
 
   useEffect(() => {
     if (savedDefaultPrompt) setDefaultPrompt(savedDefaultPrompt);
   }, [savedDefaultPrompt]);
+
+  useEffect(() => {
+    if (settingsOpen) {
+      setDraftName(appName);
+      setDraftAvatar(avatarUrl);
+    } else {
+      // Cancel any in-progress pull when modal closes
+      pullUnsubRef.current?.unsubscribe();
+      pullUnsubRef.current = null;
+      setIsPulling(false);
+      setPullStatus("");
+      setPullPercent(undefined);
+    }
+  }, [settingsOpen, appName, avatarUrl]);
 
   const createChat = trpc.chat.createChat.useMutation({
     onSuccess: (chat) => {
@@ -45,44 +126,116 @@ export default function Sidebar() {
       setSelectedChatId(chat.id);
       setCurrentChat(chat);
       closeNewChat();
-      setNewChatName('');
+      setNewChatName("");
     },
-    onError: (err) => notifications.show({ color: 'red', message: err.message }),
+    onError: (err) =>
+      notifications.show({ color: "red", message: err.message }),
   });
 
   const deleteChat = trpc.chat.deleteChat.useMutation({
     onSuccess: (_, vars) => {
       utils.chat.getChats.invalidate();
-      if (selectedChatId === vars.chatId) {
-        setSelectedChatId(null);
-      }
+      if (selectedChatId === vars.chatId) setSelectedChatId(null);
     },
-    onError: (err) => notifications.show({ color: 'red', message: err.message }),
+    onError: (err) =>
+      notifications.show({ color: "red", message: err.message }),
   });
 
   const setDefaultSystemPrompt = trpc.chat.setDefaultSystemPrompt.useMutation({
-    onSuccess: () => {
-      notifications.show({ color: 'green', message: 'Settings saved' });
-      closeSettings();
-    },
+    onSuccess: () =>
+      notifications.show({ color: "green", message: "Settings saved" }),
   });
 
-  const modelOptions = models?.map((m) => ({ value: m.name, label: m.name })) ?? [
-    { value: DEFAULT_MODEL, label: DEFAULT_MODEL },
-  ];
+  const setAppSettings = trpc.chat.setAppSettings.useMutation({
+    onSuccess: () => {
+      setAppName(draftName);
+      setAvatarUrl(draftAvatar);
+      notifications.show({ color: "green", message: "Settings saved" });
+      closeSettings();
+    },
+    onError: (err) =>
+      notifications.show({ color: "red", message: err.message }),
+  });
+
+  const modelOptions = models?.map((m) => ({
+    value: m.name,
+    label: m.name,
+  })) ?? [{ value: DEFAULT_MODEL, label: DEFAULT_MODEL }];
 
   function handleCreateChat() {
     if (!newChatName.trim()) return;
-    createChat.mutate({
-      name: newChatName.trim(),
-      model: newChatModel,
-    });
+    createChat.mutate({ name: newChatName.trim(), model: newChatModel });
   }
 
   function handleSelectChat(chatId: string) {
     const chat = chats?.find((c) => c.id === chatId);
     setSelectedChatId(chatId);
     if (chat) setCurrentChat(chat);
+  }
+
+  async function handleAvatarChange(e: React.ChangeEvent<HTMLInputElement>) {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    try {
+      const dataUrl = await resizeImageToDataUrl(file, 128);
+      setDraftAvatar(dataUrl);
+    } catch {
+      notifications.show({ color: "red", message: "Failed to process image" });
+    }
+    e.target.value = "";
+  }
+
+  function handleSaveSettings() {
+    setDefaultSystemPrompt.mutate({ prompt: defaultPrompt });
+    setAppSettings.mutate({ appName: draftName, avatarDataUrl: draftAvatar });
+  }
+
+  function handlePullModel() {
+    const model = pullModelName.trim();
+    if (!model || isPulling) return;
+
+    setIsPulling(true);
+    setPullStatus("Starting…");
+    setPullPercent(undefined);
+
+    const sub = trpcClient.chat.pullModel.subscribe(
+      { model },
+      {
+        onData(event) {
+          if (event.type === "progress") {
+            setPullStatus(event.status ?? "");
+            setPullPercent(event.percent);
+          } else if (event.type === "done") {
+            setIsPulling(false);
+            setPullModelName("");
+            setPullStatus("");
+            setPullPercent(undefined);
+            refetchModels();
+            utils.chat.getModels.invalidate();
+            notifications.show({
+              color: "green",
+              message: `${model} installed`,
+            });
+          } else if (event.type === "error") {
+            setIsPulling(false);
+            setPullStatus("");
+            setPullPercent(undefined);
+            notifications.show({
+              color: "red",
+              message: `Pull failed: ${event.error}`,
+            });
+          }
+        },
+        onError(err) {
+          setIsPulling(false);
+          setPullStatus("");
+          setPullPercent(undefined);
+          notifications.show({ color: "red", message: `Pull failed: ${err}` });
+        },
+      },
+    );
+
+    pullUnsubRef.current = sub;
   }
 
   return (
@@ -144,21 +297,30 @@ export default function Sidebar() {
 
         <Divider />
         <Group p="sm" justify="flex-end">
-          <ActionIcon variant="subtle" onClick={openSettings} aria-label="Settings">
+          <ActionIcon
+            variant="subtle"
+            onClick={openSettings}
+            aria-label="Settings"
+          >
             <IconSettings size={18} />
           </ActionIcon>
         </Group>
       </Stack>
 
       {/* New Chat Modal */}
-      <Modal opened={newChatOpen} onClose={closeNewChat} title="New Chat" centered>
+      <Modal
+        opened={newChatOpen}
+        onClose={closeNewChat}
+        title="New Chat"
+        centered
+      >
         <Stack>
           <TextInput
             label="Chat name"
             placeholder="My analysis..."
             value={newChatName}
             onChange={(e) => setNewChatName(e.target.value)}
-            onKeyDown={(e) => e.key === 'Enter' && handleCreateChat()}
+            onKeyDown={(e) => e.key === "Enter" && handleCreateChat()}
             data-autofocus
           />
           <Select
@@ -179,24 +341,173 @@ export default function Sidebar() {
       </Modal>
 
       {/* Settings Modal */}
-      <Modal opened={settingsOpen} onClose={closeSettings} title="Settings" centered size="lg">
-        <Stack>
-          <Textarea
-            label="Default system prompt"
-            description="Used for all new chats unless overridden"
-            value={defaultPrompt}
-            onChange={(e) => setDefaultPrompt(e.target.value)}
-            minRows={6}
-            autosize
-          />
-          <Button
-            onClick={() => setDefaultSystemPrompt.mutate({ prompt: defaultPrompt })}
-            loading={setDefaultSystemPrompt.isPending}
-          >
-            Save
-          </Button>
-        </Stack>
+      <Modal
+        opened={settingsOpen}
+        onClose={closeSettings}
+        title="Settings"
+        centered
+        size="lg"
+      >
+        <Tabs defaultValue="assistant">
+          <Tabs.List mb="md">
+            <Tabs.Tab value="assistant">Assistant</Tabs.Tab>
+            <Tabs.Tab value="models">Models</Tabs.Tab>
+          </Tabs.List>
+
+          {/* ── Assistant tab ── */}
+          <Tabs.Panel value="assistant">
+            <Stack>
+              <Text size="sm" fw={600} c="dimmed">Personality</Text>
+
+              <Group align="flex-start" justify="center" gap="md">
+                <Box>
+                  <Tooltip label="Click to change avatar">
+                    <UnstyledButton onClick={() => avatarInputRef.current?.click()}>
+                      <Box style={{ position: "relative", display: "inline-block" }}>
+                        <Avatar
+                          src={draftAvatar || null}
+                          size={64}
+                          radius="md"
+                          color="violet"
+                          variant="light"
+                        >
+                          <IconRobot size={32} />
+                        </Avatar>
+                        <Box
+                          style={{
+                            position: "absolute",
+                            inset: 0,
+                            borderRadius: "var(--mantine-radius-md)",
+                            display: "flex",
+                            alignItems: "center",
+                            justifyContent: "center",
+                            background: "rgba(0,0,0,0.45)",
+                            opacity: 0,
+                            transition: "opacity 0.15s",
+                          }}
+                          className="avatar-overlay"
+                        >
+                          <IconCamera size={20} color="white" />
+                        </Box>
+                      </Box>
+                    </UnstyledButton>
+                  </Tooltip>
+                  <input
+                    ref={avatarInputRef}
+                    type="file"
+                    accept="image/*"
+                    style={{ display: "none" }}
+                    onChange={handleAvatarChange}
+                  />
+                </Box>
+
+                <TextInput
+                  flex={1}
+                  label="Assistant name"
+                  placeholder={DEFAULT_APP_NAME}
+                  value={draftName}
+                  onChange={(e) => setDraftName(e.target.value)}
+                />
+              </Group>
+
+              {draftAvatar && (
+                <Button
+                  variant="subtle"
+                  color="red"
+                  size="xs"
+                  style={{ alignSelf: "flex-start" }}
+                  onClick={() => setDraftAvatar("")}
+                >
+                  Remove avatar
+                </Button>
+              )}
+
+              <Divider />
+
+              <Text size="sm" fw={600} c="dimmed">Default system prompt</Text>
+              <Textarea
+                description="Used for all new chats unless overridden per-chat"
+                value={defaultPrompt}
+                onChange={(e) => setDefaultPrompt(e.target.value)}
+                minRows={5}
+                autosize
+              />
+
+              <Button
+                onClick={handleSaveSettings}
+                loading={setDefaultSystemPrompt.isPending || setAppSettings.isPending}
+              >
+                Save
+              </Button>
+            </Stack>
+          </Tabs.Panel>
+
+          {/* ── Models tab ── */}
+          <Tabs.Panel value="models">
+            <Stack>
+              <Text size="sm" fw={600} c="dimmed">Installed models</Text>
+
+              <Stack gap="xs">
+                {models && models.length > 0 ? (
+                  models.map((m) => (
+                    <Group key={m.name} justify="space-between" px={4}>
+                      <Text size="sm">{m.name}</Text>
+                      <Badge size="xs" variant="light" color="gray">
+                        {formatModelSize(m.size)}
+                      </Badge>
+                    </Group>
+                  ))
+                ) : (
+                  <Text size="xs" c="dimmed">No models installed</Text>
+                )}
+              </Stack>
+
+              <Divider />
+
+              <Text size="sm" fw={600} c="dimmed">Pull a model</Text>
+              <Text size="xs" c="dimmed">
+                Find model names at ollama.com/library (e.g. llama3.2:3b, mistral, nomic-embed-text)
+              </Text>
+
+              <Group gap="xs">
+                <TextInput
+                  flex={1}
+                  placeholder="e.g. llama3.2:3b"
+                  value={pullModelName}
+                  onChange={(e) => setPullModelName(e.target.value)}
+                  onKeyDown={(e) => e.key === "Enter" && handlePullModel()}
+                  disabled={isPulling}
+                />
+                <Button
+                  leftSection={<IconDownload size={14} />}
+                  variant="light"
+                  onClick={handlePullModel}
+                  loading={isPulling}
+                  disabled={!pullModelName.trim()}
+                >
+                  Pull
+                </Button>
+              </Group>
+
+              {isPulling && (
+                <Stack gap={4}>
+                  <Text size="xs" c="dimmed" truncate>{pullStatus}</Text>
+                  <Progress
+                    value={pullPercent ?? 0}
+                    animated={pullPercent === undefined}
+                    size="sm"
+                  />
+                </Stack>
+              )}
+            </Stack>
+          </Tabs.Panel>
+        </Tabs>
       </Modal>
+
+      <style>{`
+        .avatar-overlay { opacity: 0; }
+        button:hover .avatar-overlay { opacity: 1; }
+      `}</style>
     </>
   );
 }

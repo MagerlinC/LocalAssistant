@@ -68,6 +68,51 @@ export async function ollamaEmbed(
   return data.embedding;
 }
 
+export async function ollamaPullModel(
+  model: string,
+  onProgress: (event: { status: string; percent?: number }) => void,
+  signal?: AbortSignal
+): Promise<void> {
+  const response = await fetch(`${OLLAMA_BASE_URL}/api/pull`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ model, stream: true }),
+    signal,
+  });
+
+  if (!response.ok) {
+    const err = await response.text();
+    throw new Error(`Ollama pull error: ${response.status} ${err}`);
+  }
+
+  if (!response.body) throw new Error('No response body from Ollama');
+
+  const reader = response.body.getReader();
+  const decoder = new TextDecoder();
+  let buf = '';
+
+  while (true) {
+    const { done, value } = await reader.read();
+    if (done) break;
+    buf += decoder.decode(value, { stream: true });
+    const lines = buf.split('\n');
+    buf = lines.pop() ?? '';
+    for (const line of lines) {
+      if (!line.trim()) continue;
+      try {
+        const json = JSON.parse(line) as { status: string; total?: number; completed?: number };
+        const percent =
+          json.total && json.completed
+            ? Math.round((json.completed / json.total) * 100)
+            : undefined;
+        onProgress({ status: json.status, percent });
+      } catch {
+        // ignore partial lines
+      }
+    }
+  }
+}
+
 export async function ollamaListModels(): Promise<
   Array<{ name: string; size: number; digest: string; modified_at: string }>
 > {

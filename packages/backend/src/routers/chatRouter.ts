@@ -2,7 +2,7 @@ import { z } from 'zod';
 import { router, publicProcedure } from '../trpc';
 import * as chatService from '../services/chatService';
 import * as fileService from '../services/fileService';
-import { ollamaChat, ollamaListModels } from '../lib/ollama';
+import { ollamaChat, ollamaListModels, ollamaPullModel } from '../lib/ollama';
 import {
   CreateChatSchema,
   UpdateChatSchema,
@@ -86,6 +86,53 @@ export const chatRouter = router({
     .mutation(({ input }) => {
       chatService.setSetting('defaultSystemPrompt', input.prompt);
       return { success: true };
+    }),
+
+  getAppSettings: publicProcedure.query(() => {
+    return {
+      appName: chatService.getSetting('appName') ?? '',
+      avatarDataUrl: chatService.getSetting('avatarDataUrl') ?? '',
+    };
+  }),
+
+  setAppSettings: publicProcedure
+    .input(z.object({ appName: z.string(), avatarDataUrl: z.string() }))
+    .mutation(({ input }) => {
+      chatService.setSetting('appName', input.appName);
+      chatService.setSetting('avatarDataUrl', input.avatarDataUrl);
+      return { success: true };
+    }),
+
+  pullModel: publicProcedure
+    .input(z.object({ model: z.string().min(1) }))
+    .subscription(({ input }) => {
+      return observable<{
+        type: 'progress' | 'done' | 'error';
+        status?: string;
+        percent?: number;
+        error?: string;
+      }>((emit) => {
+        const abortController = new AbortController();
+
+        (async () => {
+          try {
+            await ollamaPullModel(
+              input.model,
+              ({ status, percent }) => emit.next({ type: 'progress', status, percent }),
+              abortController.signal
+            );
+            emit.next({ type: 'done' });
+            emit.complete();
+          } catch (err) {
+            if (!abortController.signal.aborted) {
+              emit.next({ type: 'error', error: err instanceof Error ? err.message : 'Unknown error' });
+              emit.complete();
+            }
+          }
+        })();
+
+        return () => abortController.abort();
+      });
     }),
 
   // Indexes all new/changed files for a chat, streaming progress back to the client.

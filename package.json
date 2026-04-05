@@ -5,7 +5,7 @@
   "scripts": {
     "dev": "pnpm --filter @local-assistant/backend dev & pnpm --filter @local-assistant/desktop dev",
     "build": "pnpm --filter @local-assistant/shared build && pnpm --filter @local-assistant/backend build && pnpm --filter @local-assistant/desktop build",
-    "tauri": "pnpm --filter @local-assistant/desktop tauri"
+    "tauri": "pnpm --filter @local-assistant/desktop tauri dev"
   },
   "workspaces": [
     "apps/*",

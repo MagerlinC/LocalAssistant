@@ -1,27 +1,56 @@
-import { AppShell, Group, Text, ActionIcon, useMantineColorScheme, Box, ThemeIcon } from '@mantine/core';
-import { IconSun, IconMoon, IconBrain } from '@tabler/icons-react';
-import Sidebar from './components/Sidebar';
-import ChatView from './components/ChatView';
-import { useApp } from './context/AppContext';
+import { useEffect } from "react";
+import {
+  AppShell,
+  Group,
+  Text,
+  ActionIcon,
+  useMantineColorScheme,
+  Box,
+  Avatar,
+} from "@mantine/core";
+import { IconSun, IconMoon, IconRobot } from "@tabler/icons-react";
+import Sidebar from "./components/Sidebar";
+import ChatView from "./components/ChatView";
+import { trpc } from "./lib/trpc";
+import { useApp } from "./context/AppContext";
+
+const DEFAULT_APP_NAME = "LocalAssistant";
 
 export default function App() {
-  const { selectedChatId } = useApp();
+  const { selectedChatId, appName, setAppName, setAvatarUrl } = useApp();
   const { colorScheme, toggleColorScheme } = useMantineColorScheme();
+
+  const { data: appSettings } = trpc.chat.getAppSettings.useQuery();
+
+  useEffect(() => {
+    if (appSettings) {
+      setAppName(appSettings.appName);
+      setAvatarUrl(appSettings.avatarDataUrl);
+    }
+  }, [appSettings, setAppName, setAvatarUrl]);
+
+  const displayName = appName.trim() || DEFAULT_APP_NAME;
 
   return (
     <AppShell
       header={{ height: 52 }}
-      navbar={{ width: 260, breakpoint: 'sm' }}
+      navbar={{ width: 260, breakpoint: "sm" }}
       padding={0}
     >
       <AppShell.Header>
         <Group h="100%" px="md" justify="space-between">
           <Group gap="xs">
-            <ThemeIcon color="violet" variant="light" size="md" radius="md">
-              <IconBrain size={18} />
-            </ThemeIcon>
+            <Avatar
+              src={appSettings?.avatarDataUrl || null}
+              size={32}
+              radius="md"
+              color="violet"
+              variant="light"
+            >
+              <IconRobot size={18} />
+            </Avatar>
             <Text fw={700} size="lg" c="violet">
-              LocalAssistant
+              {displayName}
             </Text>
           </Group>
           <ActionIcon
@@ -29,7 +58,11 @@ export default function App() {
             onClick={() => toggleColorScheme()}
             aria-label="Toggle color scheme"
           >
-            {colorScheme === 'dark' ? <IconSun size={18} /> : <IconMoon size={18} />}
+            {colorScheme === "dark" ? (
+              <IconSun size={18} />
+            ) : (
+              <IconMoon size={18} />
+            )}
           </ActionIcon>
         </Group>
       </AppShell.Header>
@@ -45,7 +78,11 @@ export default function App() {
           ) : (
             <Box
               h="100%"
-              style={{ display: 'flex', alignItems: 'center', justifyContent: 'center' }}
+              style={{
+                display: "flex",
+                alignItems: "center",
+                justifyContent: "center",
+              }}
             >
               <Text c="dimmed" size="lg">
                 Select a chat or create a new one
