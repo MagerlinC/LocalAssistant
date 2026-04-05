@@ -1,5 +1,5 @@
-import { AppShell, Group, Text, ActionIcon, useMantineColorScheme, Box } from '@mantine/core';
-import { IconSun, IconMoon } from '@tabler/icons-react';
+import { AppShell, Group, Text, ActionIcon, useMantineColorScheme, Box, ThemeIcon } from '@mantine/core';
+import { IconSun, IconMoon, IconBrain } from '@tabler/icons-react';
 import Sidebar from './components/Sidebar';
 import ChatView from './components/ChatView';
 import { useApp } from './context/AppContext';
@@ -16,9 +16,14 @@ export default function App() {
     >
       <AppShell.Header>
         <Group h="100%" px="md" justify="space-between">
-          <Text fw={700} size="lg" c="violet">
-            LocalAssistant
-          </Text>
+          <Group gap="xs">
+            <ThemeIcon color="violet" variant="light" size="md" radius="md">
+              <IconBrain size={18} />
+            </ThemeIcon>
+            <Text fw={700} size="lg" c="violet">
+              LocalAssistant
+            </Text>
+          </Group>
           <ActionIcon
             variant="subtle"
             onClick={() => toggleColorScheme()}

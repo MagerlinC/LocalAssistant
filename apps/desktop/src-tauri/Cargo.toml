@@ -9,10 +9,6 @@ default-run = "local-assistant"
 edition = "2021"
 rust-version = "1.70"
 
-[lib]
-name = "app_lib"
-crate-type = ["staticlib", "cdylib", "rlib"]
-
 [[bin]]
 name = "local-assistant"
 path = "src/main.rs"
@@ -23,12 +19,8 @@ tauri-build = { version = "1.5", features = [] }
 [dependencies]
 serde_json = "1.0"
 serde = { version = "1.0", features = ["derive"] }
-tauri = { version = "1.6", features = [
-  "api-all",
+tauri = { version = "1.6", features = [ "fs-read-file", "dialog-all", "fs-read-dir",
   "shell-open",
-  "fs-all",
-  "dialog-open",
-  "dialog-save",
   "path-all",
   "process-exit",
   "window-all"

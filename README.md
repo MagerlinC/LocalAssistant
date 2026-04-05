@@ -6,16 +6,24 @@ A local-first AI desktop/web assistant that analyzes office files using a locall
 
 - **Ollama** running on the host at port `11434`
 - A model pulled, e.g.: `ollama pull qwen2.5:7b`
-- **Docker + Docker Compose** (for web or containerised backend)
-- **pnpm 9+** + **Rust/Cargo** (only needed for Tauri desktop mode)
+
+| Mode | Docker | pnpm | Rust |
+|------|:------:|:----:|:----:|
+| Web (browser) | ✅ required | — | — |
+| Tauri (native window) | optional | ✅ required | ✅ required |
+| Fully local | — | ✅ required | ✅ required |
+
+> **Rust is only needed if you want a native desktop window.** Tauri compiles to a
+> native binary for your OS — that step cannot happen inside a container.
+> If you just want to run the app, use web mode.
 
 ---
 
 ## Running Modes
 
-### 1. Web mode — fully containerised (browser)
+### 1. Web mode — fully containerised, no Rust needed
 
-Everything runs in Docker. Open your browser, no desktop install needed.
+Everything runs in Docker. Open your browser, no Rust or pnpm install required.
 
 ```bash
 docker compose --profile web up --build
@@ -26,15 +34,23 @@ To change the port: `WEB_PORT=3000 docker compose --profile web up`
 
 ---
 
-### 2. Tauri desktop mode — backend in Docker, native window
+### 2. Tauri desktop mode — native window (requires Rust locally)
 
-Backend runs in Docker; the native Tauri window connects to it.
+The backend runs in Docker but the native window compiles and runs on your machine,
+so **Rust must be installed locally**:
+
+```bash
+curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh
+source ~/.cargo/env
+```
+
+Then:
 
 ```bash
 # Terminal 1 — start the containerised backend
 docker compose --profile tauri up --build
 
-# Terminal 2 — open the native desktop window
+# Terminal 2 — compile and open the native desktop window
 pnpm install
 pnpm --filter @local-assistant/shared build
 pnpm --filter @local-assistant/desktop tauri dev

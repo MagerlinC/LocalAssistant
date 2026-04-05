@@ -4,20 +4,21 @@ import type { AppRouter } from '@local-assistant/backend/src/routers';
 
 export const trpc = createTRPCReact<AppRouter>();
 
-// In web/Docker mode these env vars are empty strings — nginx proxies /trpc
-// on the same origin so no absolute URL is needed.
-// In Tauri / local dev they point to localhost:3001.
-const BACKEND_URL = import.meta.env.VITE_BACKEND_URL || 'http://localhost:3001';
+// VITE_BACKEND_URL is set to an explicit empty string only in the web/Docker
+// build (Dockerfile.web), where nginx proxies /trpc on the same origin.
+// In Tauri and local dev it is undefined, so we fall back to localhost:3001.
+const isWebProxyMode = import.meta.env.VITE_BACKEND_URL === '';
 
-// Derive WebSocket URL: if running in web/Docker mode (same-origin nginx proxy)
-// use the current page host so nginx can upgrade the connection.
+const BACKEND_URL = isWebProxyMode ? '' : (import.meta.env.VITE_BACKEND_URL || 'http://localhost:3001');
+
 function getWsUrl(): string {
-  if (import.meta.env.VITE_WS_URL) return import.meta.env.VITE_WS_URL;
-  if (typeof window !== 'undefined') {
+  if (isWebProxyMode) {
+    // Same-origin nginx proxy — derive from the current page host.
     const proto = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
     return `${proto}//${window.location.host}`;
   }
-  return 'ws://localhost:3001';
+  // Tauri or local dev — backend is always on its own port.
+  return import.meta.env.VITE_WS_URL || 'ws://localhost:3001';
 }
 
 const wsClient = createWSClient({

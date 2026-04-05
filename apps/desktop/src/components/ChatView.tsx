@@ -14,7 +14,7 @@ interface ChatViewProps {
 }
 
 export default function ChatView({ chatId }: ChatViewProps) {
-  const { setCurrentChat, indexingStatus } = useApp();
+  const { setCurrentChat } = useApp();
   const [streamingContent, setStreamingContent] = useState<string | null>(null);
 
   const { data: chat } = trpc.chat.getChat.useQuery({ chatId }, { enabled: !!chatId });
@@ -40,11 +40,6 @@ export default function ChatView({ chatId }: ChatViewProps) {
             {chat.model}
           </Text>
         </Box>
-        {indexingStatus && (
-          <Text size="xs" c="yellow" style={{ fontStyle: 'italic' }}>
-            {indexingStatus}
-          </Text>
-        )}
       </Group>
 
       <Tabs

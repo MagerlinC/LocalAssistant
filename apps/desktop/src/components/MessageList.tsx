@@ -63,13 +63,10 @@ function MessageBubble({ role, content, isStreaming }: MessageBubbleProps) {
         p="sm"
         maw="75%"
         radius="md"
-        style={{
-          backgroundColor: isUser
-            ? 'var(--mantine-color-violet-9)'
-            : 'var(--mantine-color-dark-6)',
-        }}
+        bg={isUser ? 'violet.9' : undefined}
+        withBorder={!isUser}
       >
-        <Box style={{ fontSize: 14, lineHeight: 1.6 }}>
+        <Box style={{ fontSize: 14, lineHeight: 1.6, color: isUser ? 'white' : undefined }}>
           <ReactMarkdown
             remarkPlugins={[remarkGfm]}
             components={{
