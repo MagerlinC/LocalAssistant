@@ -30,7 +30,6 @@ import {
   IconDownload,
 } from "@tabler/icons-react";
 import { useState, useEffect, useRef } from "react";
-import { useDisclosure } from "@mantine/hooks";
 import { notifications } from "@mantine/notifications";
 import { trpc, trpcClient } from "../lib/trpc";
 import { useApp } from "../context/AppContext";
@@ -69,9 +68,12 @@ function formatModelSize(bytes: number): string {
 interface SidebarProps {
   settingsOpened: boolean;
   onCloseSettings: () => void;
+  newChatOpened: boolean;
+  onOpenNewChat: () => void;
+  onCloseNewChat: () => void;
 }
 
-export default function Sidebar({ settingsOpened, onCloseSettings }: SidebarProps) {
+export default function Sidebar({ settingsOpened, onCloseSettings, newChatOpened, onOpenNewChat, onCloseNewChat }: SidebarProps) {
   const {
     selectedChatId,
     setSelectedChatId,
@@ -83,8 +85,9 @@ export default function Sidebar({ settingsOpened, onCloseSettings }: SidebarProp
     accentColor,
     setAccentColor,
   } = useApp();
-  const [newChatOpen, { open: openNewChat, close: closeNewChat }] =
-    useDisclosure(false);
+  const newChatOpen = newChatOpened;
+  const openNewChat = onOpenNewChat;
+  const closeNewChat = onCloseNewChat;
   const settingsOpen = settingsOpened;
   const closeSettings = onCloseSettings;
   const [newChatName, setNewChatName] = useState("");

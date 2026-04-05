@@ -3,7 +3,7 @@ import {
   AppShell, Group, Text, ActionIcon, useMantineColorScheme,
   Box, Avatar, Center, Loader, Tooltip,
 } from '@mantine/core';
-import { useDisclosure } from '@mantine/hooks';
+import { useDisclosure, useHotkeys } from '@mantine/hooks';
 import { IconSun, IconMoon, IconRobot, IconSettings } from '@tabler/icons-react';
 import Sidebar from './components/Sidebar';
 import ChatView from './components/ChatView';
@@ -20,6 +20,14 @@ export default function App() {
   } = useApp();
   const { colorScheme, toggleColorScheme } = useMantineColorScheme();
   const [settingsOpened, { open: openSettings, close: closeSettings }] = useDisclosure(false);
+  const [newChatOpened, { open: openNewChat, close: closeNewChat }] = useDisclosure(false);
+
+  useHotkeys([
+    ['mod+N', openNewChat],
+    ['mod+S', openSettings],
+    ['mod+T', toggleColorScheme],
+    ['Escape', () => { closeNewChat(); closeSettings(); }],
+  ]);
 
   // Retry aggressively while the sidecar backend is still starting up.
   const { data: appSettings } = trpc.chat.getAppSettings.useQuery(undefined, {
@@ -108,7 +116,13 @@ export default function App() {
       </AppShell.Header>
 
       <AppShell.Navbar p={0}>
-        <Sidebar settingsOpened={settingsOpened} onCloseSettings={closeSettings} />
+        <Sidebar
+          settingsOpened={settingsOpened}
+          onCloseSettings={closeSettings}
+          newChatOpened={newChatOpened}
+          onOpenNewChat={openNewChat}
+          onCloseNewChat={closeNewChat}
+        />
       </AppShell.Navbar>
 
       <AppShell.Main>
