@@ -8,6 +8,7 @@
     "tauri": "pnpm --filter @local-assistant/desktop tauri dev",
     "build:backend-binary": "pnpm --filter @local-assistant/shared build && pnpm --filter @local-assistant/backend build && node packages/backend/scripts/build-binary.mjs",
     "build:backend-binary:all": "pnpm --filter @local-assistant/shared build && pnpm --filter @local-assistant/backend build && node packages/backend/scripts/build-binary.mjs --all",
+    "setup:dev": "node scripts/create-dev-stubs.mjs",
     "download:ollama": "node scripts/download-ollama.mjs",
     "download:ollama:all": "node scripts/download-ollama.mjs --all",
     "build:dist": "pnpm build:backend-binary && pnpm download:ollama && pnpm --filter @local-assistant/desktop tauri build"

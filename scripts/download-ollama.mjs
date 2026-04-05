@@ -55,7 +55,10 @@ for (const key of keys) {
 
   const dest = path.join(TAURI_BIN, entry.tauriName);
 
-  if (fs.existsSync(dest)) {
+  // Skip only if a real binary (> 1 MB) is already present.
+  // Dev stubs created by create-dev-stubs.mjs are tiny and get overwritten.
+  const REAL_BINARY_MIN_BYTES = 1 * 1024 * 1024;
+  if (fs.existsSync(dest) && fs.statSync(dest).size >= REAL_BINARY_MIN_BYTES) {
     console.log(`  Already present: ${entry.tauriName} — skipping download.`);
     continue;
   }

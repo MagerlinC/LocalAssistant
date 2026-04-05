@@ -12,9 +12,10 @@ import type { Message } from '@local-assistant/shared';
 interface MessageListProps {
   chatId: string;
   streamingContent: string | null;
+  pendingUserMessage: string | null;
 }
 
-export default function MessageList({ chatId, streamingContent }: MessageListProps) {
+export default function MessageList({ chatId, streamingContent, pendingUserMessage }: MessageListProps) {
   const viewport = useRef<HTMLDivElement>(null);
   const { avatarUrl } = useApp();
 
@@ -37,6 +38,9 @@ export default function MessageList({ chatId, streamingContent }: MessageListPro
         {messages?.map((msg) => (
           <MessageBubble key={msg.id} role={msg.role} content={msg.content} avatarUrl={avatarUrl} />
         ))}
+        {pendingUserMessage !== null && (
+          <MessageBubble role="user" content={pendingUserMessage} avatarUrl={avatarUrl} />
+        )}
         {streamingContent !== null && (
           <MessageBubble role="assistant" content={streamingContent} isStreaming avatarUrl={avatarUrl} />
         )}

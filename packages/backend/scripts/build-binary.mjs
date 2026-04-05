@@ -24,15 +24,15 @@ const TAURI_BIN = path.resolve(ROOT, 'apps', 'desktop', 'src-tauri', 'bin');
 
 // Map: pkg target → { outName (pkg output), tauriName (Tauri triple) }
 const TARGETS = {
-  'node20-macos-arm64': {
+  'node22-macos-arm64': {
     pkgName: 'backend-macos-arm64',
     tauriName: 'backend-aarch64-apple-darwin',
   },
-  'node20-macos-x64': {
+  'node22-macos-x64': {
     pkgName: 'backend-macos-x64',
     tauriName: 'backend-x86_64-apple-darwin',
   },
-  'node20-win-x64': {
+  'node22-win-x64': {
     pkgName: 'backend-win-x64.exe',
     tauriName: 'backend-x86_64-pc-windows-msvc.exe',
   },
@@ -41,9 +41,9 @@ const TARGETS = {
 function currentPkgTarget() {
   const p = os.platform();
   const a = os.arch();
-  if (p === 'darwin' && a === 'arm64') return 'node20-macos-arm64';
-  if (p === 'darwin' && a === 'x64')   return 'node20-macos-x64';
-  if (p === 'win32'  && a === 'x64')   return 'node20-win-x64';
+  if (p === 'darwin' && a === 'arm64') return 'node22-macos-arm64';
+  if (p === 'darwin' && a === 'x64')   return 'node22-macos-x64';
+  if (p === 'win32'  && a === 'x64')   return 'node22-win-x64';
   throw new Error(`Unsupported platform: ${p}/${a}`);
 }
 

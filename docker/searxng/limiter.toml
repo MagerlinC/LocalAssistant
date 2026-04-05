@@ -1,0 +1,2 @@
+# Rate limiting is disabled in settings.yml (limiter: false).
+# This file exists only to suppress SearXNG's "missing config file" warning.

@@ -16,6 +16,7 @@ interface ChatViewProps {
 export default function ChatView({ chatId }: ChatViewProps) {
   const { setCurrentChat } = useApp();
   const [streamingContent, setStreamingContent] = useState<string | null>(null);
+  const [pendingUserMessage, setPendingUserMessage] = useState<string | null>(null);
 
   const { data: chat } = trpc.chat.getChat.useQuery({ chatId }, { enabled: !!chatId });
   const { data: files } = trpc.chat.getFiles.useQuery({ chatId }, { enabled: !!chatId });
@@ -73,9 +74,9 @@ export default function ChatView({ chatId }: ChatViewProps) {
           value="chat"
           style={{ flex: 1, display: 'flex', flexDirection: 'column', overflow: 'hidden' }}
         >
-          <MessageList chatId={chatId} streamingContent={streamingContent} />
+          <MessageList chatId={chatId} streamingContent={streamingContent} pendingUserMessage={pendingUserMessage} />
           <Divider />
-          <MessageInput chatId={chatId} onStreamingChange={setStreamingContent} />
+          <MessageInput chatId={chatId} onStreamingChange={setStreamingContent} onPendingMessage={setPendingUserMessage} />
         </Tabs.Panel>
 
         <Tabs.Panel value="files" style={{ overflow: 'auto', flex: 1 }}>

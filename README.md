@@ -1,30 +1,43 @@
 # LocalAssistant
 
 A local-first AI desktop assistant. Runs fully offline using Ollama — no cloud, no telemetry.
+Web search is powered by a local [SearXNG](https://docs.searxng.org) instance.
 
 ## Prerequisites
 
-- [Node.js](https://nodejs.org) + [pnpm](https://pnpm.io) (`npm i -g pnpm`)
+- [Node.js 22+](https://nodejs.org) + [pnpm](https://pnpm.io) (`npm i -g pnpm`)
 - [Rust](https://rustup.rs) (for Tauri)
-- [Docker](https://www.docker.com) (for the dev backend)
+- [Docker](https://www.docker.com)
 - Ollama running locally at port `11434`
 
 ---
 
 ## Development
 
+`docker compose up` starts the backend and SearXNG. The Tauri window runs locally with hot reload.
+
+**One-time setup** (creates placeholder binaries so Tauri's build check passes in dev):
+
 ```bash
 pnpm install
 pnpm --filter @local-assistant/shared build
+pnpm setup:dev
+```
 
-# Terminal 1 — backend (Docker)
-docker compose --profile tauri up --build
+**Then, each dev session:**
 
-# Terminal 2 — desktop window (hot reload)
+```bash
+# Terminal 1 — backend + SearXNG
+docker compose up --build
+
+# Terminal 2 — desktop window
 pnpm --filter @local-assistant/desktop tauri dev
 ```
 
-The app talks to the Dockerised backend at `http://localhost:3001`.
+> **Linux:** if `host.docker.internal` isn't available, create a `.env` file:
+> ```
+> OLLAMA_URL=http://172.17.0.1:11434
+> ```
 
 ---
 
@@ -32,23 +45,16 @@ The app talks to the Dockerised backend at `http://localhost:3001`.
 
 The release build bundles the backend and Ollama as self-contained sidecars.
 
-### 1. Build the backend binary
-
 ```bash
+# 1. Compile the backend to a native binary
 pnpm build:backend-binary        # current platform
 pnpm build:backend-binary:all    # all platforms (macOS arm64/x64, Windows x64)
-```
 
-### 2. Download the Ollama binary
-
-```bash
+# 2. Download the Ollama sidecar binary
 pnpm download:ollama             # current platform
 pnpm download:ollama:all         # all platforms
-```
 
-### 3. Build the Tauri app
-
-```bash
+# 3. Build the Tauri installer
 pnpm --filter @local-assistant/desktop tauri build
 ```
 
@@ -66,7 +72,8 @@ The output installer is written to `apps/desktop/src-tauri/target/release/bundle
 
 ```
 apps/desktop/        Tauri shell + React/Mantine frontend
-packages/backend/    Node.js tRPC server + RAG pipeline
+packages/backend/    Node.js tRPC server + RAG pipeline + web search
 packages/shared/     Shared TypeScript types
+docker/              SearXNG config, nginx config
 scripts/             Build helpers (download-ollama, etc.)
 ```

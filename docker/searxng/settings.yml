@@ -1,0 +1,21 @@
+# SearXNG settings for LocalAssistant
+# Inherits all defaults; only overrides what we need.
+use_default_settings: true
+
+server:
+  # Change this to a random string in production.
+  secret_key: "localassistant_searxng_change_this_key"
+  # No rate-limiting needed for a single-user local setup.
+  limiter: false
+  image_proxy: false
+
+ui:
+  default_theme: simple
+  default_locale: en
+
+search:
+  safe_search: 0
+  # Enable JSON output so the backend can query the API.
+  formats:
+    - html
+    - json

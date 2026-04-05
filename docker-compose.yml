@@ -3,13 +3,13 @@ name: local-assistant
 # ─────────────────────────────────────────────────────────────────────────────
 # Usage:
 #
-#   Web mode (browser):
-#     docker compose --profile web up
-#     Open http://localhost:8080
-#
-#   Tauri mode (desktop window):
-#     docker compose --profile tauri up      # starts backend only
+#   Tauri desktop mode (default):
+#     docker compose up --build
 #     pnpm --filter @local-assistant/desktop tauri dev
+#
+#   Web mode (browser only, no Rust needed):
+#     docker compose --profile web up --build
+#     Open http://localhost:8080
 #
 # In both modes Ollama must be running on the host at port 11434.
 # On Linux, set OLLAMA_URL=http://172.17.0.1:11434 in a .env file if
@@ -18,18 +18,31 @@ name: local-assistant
 
 services:
 
-  # ── Backend (Node.js / tRPC) ─────────────────────────────────────────────
+  # ── SearXNG (local web search) ────────────────────────────────────────────
+  searxng:
+    image: searxng/searxng:latest
+    restart: unless-stopped
+    environment:
+      SEARXNG_BASE_URL: "http://localhost:8888/"
+    volumes:
+      - ./docker/searxng:/etc/searxng:rw
+    ports:
+      - "8888:8080"
+
+  # ── Backend (Node.js / tRPC) ──────────────────────────────────────────────
   backend:
     build:
       context: .
       dockerfile: Dockerfile.backend
-    profiles: ["web", "tauri"]
     restart: unless-stopped
+    depends_on:
+      - searxng
     environment:
       PORT: "3001"
       NODE_ENV: production
       # Reach the host's Ollama instance. Override with a .env file on Linux.
       OLLAMA_URL: "${OLLAMA_URL:-http://host.docker.internal:11434}"
+      SEARXNG_URL: "http://searxng:8080"
     volumes:
       # Persist the SQLite DB and indexed chat files on the host
       - "${LOCAL_ASSISTANT_DATA:-$HOME/LocalAssistant}:/root/LocalAssistant"
@@ -43,7 +56,7 @@ services:
       retries: 5
       start_period: 10s
 
-  # ── Frontend (nginx serving the built React app) ──────────────────────────
+  # ── Frontend (nginx serving the built React app) — web mode only ──────────
   frontend:
     build:
       context: .

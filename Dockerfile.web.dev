@@ -1,6 +1,6 @@
 # syntax=docker/dockerfile:1
 # Development frontend — Vite dev server with HMR
-FROM node:20-slim
+FROM node:22-slim
 RUN npm install -g pnpm
 WORKDIR /app
 

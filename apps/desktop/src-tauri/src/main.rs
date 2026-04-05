@@ -69,10 +69,23 @@ fn resolve_data_dir(app: &tauri::App) -> PathBuf {
 // ── Chat file helpers (used by Tauri commands) ────────────────────────────────
 
 fn chat_files_dir(app_handle: &tauri::AppHandle, chat_id: &str) -> Result<PathBuf, String> {
+    // In dev the backend runs in Docker with ~/LocalAssistant mounted as its
+    // data dir. In release the backend sidecar receives DATA_DIR = app_data_dir.
+    #[cfg(debug_assertions)]
+    let base = {
+        let _ = app_handle; // suppress unused warning
+        let home = std::env::var("HOME")
+            .or_else(|_| std::env::var("USERPROFILE"))
+            .map_err(|_| "Could not determine home directory".to_string())?;
+        PathBuf::from(home).join("LocalAssistant")
+    };
+
+    #[cfg(not(debug_assertions))]
     let base = app_handle
         .path_resolver()
         .app_data_dir()
         .ok_or_else(|| "Could not determine app data dir".to_string())?;
+
     let dir = base.join("chats").join(chat_id).join("files");
     std::fs::create_dir_all(&dir).map_err(|e| format!("Failed to create chat folder: {e}"))?;
     Ok(dir)
@@ -147,14 +160,14 @@ fn main() {
             open_chat_folder,
             get_data_dir,
         ])
-        .setup(|app| {
+        .setup(|_app| {
             // In debug builds (tauri dev) the Docker/npm backend is already
             // running — skip sidecar launch entirely.
             #[cfg(not(debug_assertions))]
             {
-                let data_dir = resolve_data_dir(app);
+                let data_dir = resolve_data_dir(_app);
                 let data_dir_str = data_dir.to_string_lossy().into_owned();
-                let pm: State<ProcessManager> = app.state();
+                let pm: State<ProcessManager> = _app.state();
 
                 // ── 1. Ollama ────────────────────────────────────────────
                 if !port_open(11434) {
@@ -198,7 +211,8 @@ fn main() {
         })
         .on_window_event(|event| {
             if let tauri::WindowEvent::Destroyed = event.event() {
-                let pm: State<ProcessManager> = event.window().app_handle().state();
+                let app_handle = event.window().app_handle();
+                let pm: State<ProcessManager> = app_handle.state();
                 pm.kill_all();
             }
         })

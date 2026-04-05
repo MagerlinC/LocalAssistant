@@ -2,7 +2,8 @@ import { z } from 'zod';
 import { router, publicProcedure } from '../trpc';
 import * as chatService from '../services/chatService';
 import * as fileService from '../services/fileService';
-import { ollamaChat, ollamaListModels, ollamaPullModel } from '../lib/ollama';
+import { ollamaChat, ollamaListModels, ollamaPullModel, OllamaTool, OllamaChatMessage } from '../lib/ollama';
+import { webSearch } from '../lib/webSearch';
 import {
   CreateChatSchema,
   UpdateChatSchema,
@@ -13,6 +14,30 @@ import {
   DEFAULT_SYSTEM_PROMPT,
 } from '@local-assistant/shared';
 import { observable } from '@trpc/server/observable';
+
+// ── Tool definitions available to the agent ───────────────────────────────────
+const AGENT_TOOLS: OllamaTool[] = [
+  {
+    type: 'function',
+    function: {
+      name: 'web_search',
+      description:
+        'Search the internet for up-to-date information. Use this when the user asks about current events, recent news, live data, or anything that may have changed after your training cutoff.',
+      parameters: {
+        type: 'object',
+        properties: {
+          query: {
+            type: 'string',
+            description: 'The search query to look up',
+          },
+        },
+        required: ['query'],
+      },
+    },
+  },
+];
+
+const MAX_TOOL_ROUNDS = 3;
 
 export const chatRouter = router({
   createChat: publicProcedure
@@ -178,7 +203,11 @@ export const chatRouter = router({
       content: z.string().min(1),
     }))
     .subscription(({ input }) => {
-      return observable<{ type: 'text' | 'done' | 'error'; content?: string; error?: string }>((emit) => {
+      return observable<{
+        type: 'text' | 'done' | 'error' | 'status';
+        content?: string;
+        error?: string;
+      }>((emit) => {
         let cancelled = false;
         const abortController = new AbortController();
 
@@ -219,24 +248,73 @@ export const chatRouter = router({
                 contextBlocks.map((b, i) => `[${i + 1}] ${b}`).join('\n\n');
             }
 
-            const messages = [
-              { role: 'system' as const, content: fullSystemPrompt },
+            // Build the initial message list for this turn
+            const messages: OllamaChatMessage[] = [
+              { role: 'system', content: fullSystemPrompt },
               ...recentHistory
                 .filter((m) => m.role !== 'system')
                 .map((m) => ({ role: m.role as 'user' | 'assistant', content: m.content })),
             ];
 
+            // ── Agentic loop ──────────────────────────────────────────────────
             let fullResponse = '';
-            await ollamaChat(
-              chat.model,
-              messages,
-              (chunk) => {
-                if (cancelled) return;
-                fullResponse += chunk;
-                emit.next({ type: 'text', content: chunk });
-              },
-              abortController.signal
-            );
+
+            for (let round = 0; round < MAX_TOOL_ROUNDS; round++) {
+              if (cancelled) return;
+
+              // On the last allowed round don't offer tools so the model is
+              // forced to produce a text response instead of calling again.
+              const toolsThisRound = round < MAX_TOOL_ROUNDS - 1 ? AGENT_TOOLS : [];
+
+              const result = await ollamaChat(
+                chat.model,
+                messages,
+                (chunk) => {
+                  if (cancelled) return;
+                  fullResponse += chunk;
+                  emit.next({ type: 'text', content: chunk });
+                },
+                abortController.signal,
+                toolsThisRound
+              );
+
+              // No tool calls → model responded normally, we're done
+              if (!result.toolCalls || result.toolCalls.length === 0) break;
+
+              // Model requested tool use — add its (empty-content) message to history
+              messages.push({
+                role: 'assistant',
+                content: '',
+                tool_calls: result.toolCalls,
+              });
+
+              // Execute each requested tool and append results
+              for (const call of result.toolCalls) {
+                if (call.function.name === 'web_search') {
+                  const query = String(call.function.arguments.query ?? '').trim();
+                  if (!query) continue;
+
+                  emit.next({ type: 'status', content: `Searching: ${query}` });
+
+                  let toolContent: string;
+                  try {
+                    const results = await webSearch(query);
+                    toolContent = results.length > 0
+                      ? results
+                          .map((r, i) =>
+                            `[${i + 1}] ${r.title}\nURL: ${r.url}\n${r.content}`
+                          )
+                          .join('\n\n---\n\n')
+                      : 'No results found.';
+                  } catch (err) {
+                    toolContent = `Search failed: ${err instanceof Error ? err.message : 'Unknown error'}`;
+                  }
+
+                  messages.push({ role: 'tool', content: toolContent });
+                }
+              }
+              // Loop: next iteration sends messages (with tool results) back to the model
+            }
 
             if (!cancelled && fullResponse) {
               chatService.saveMessage(input.chatId, 'assistant', fullResponse);
