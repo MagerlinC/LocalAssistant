@@ -1,32 +1,58 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useState } from "react";
 import {
-  AppShell, Group, Text, ActionIcon, useMantineColorScheme,
-  Box, Avatar, Center, Loader, Tooltip,
-} from '@mantine/core';
-import { useDisclosure, useHotkeys } from '@mantine/hooks';
-import { IconSun, IconMoon, IconRobot, IconSettings } from '@tabler/icons-react';
-import Sidebar from './components/Sidebar';
-import ChatView from './components/ChatView';
-import SetupWizard from './components/SetupWizard';
-import { trpc } from './lib/trpc';
-import { useApp } from './context/AppContext';
+  AppShell,
+  Group,
+  Text,
+  ActionIcon,
+  useMantineColorScheme,
+  Box,
+  Avatar,
+  Center,
+  Loader,
+  Tooltip,
+} from "@mantine/core";
+import { useDisclosure, useHotkeys } from "@mantine/hooks";
+import {
+  IconSun,
+  IconMoon,
+  IconRobot,
+  IconSettings,
+} from "@tabler/icons-react";
+import Sidebar from "./components/Sidebar";
+import ChatView from "./components/ChatView";
+import SetupWizard from "./components/SetupWizard";
+import { trpc } from "./lib/trpc";
+import { useApp } from "./context/AppContext";
 
-const DEFAULT_APP_NAME = 'LocalAssistant';
+const DEFAULT_APP_NAME = "LocalAssistant";
 
 export default function App() {
   const {
-    selectedChatId, appName, setAppName, setAvatarUrl, setAccentColor,
-    setupComplete, setSetupComplete,
+    selectedChatId,
+    appName,
+    setAppName,
+    setAvatarUrl,
+    setAccentColor,
+    setupComplete,
+    setSetupComplete,
   } = useApp();
   const { colorScheme, toggleColorScheme } = useMantineColorScheme();
-  const [settingsOpened, { open: openSettings, close: closeSettings }] = useDisclosure(false);
-  const [newChatOpened, { open: openNewChat, close: closeNewChat }] = useDisclosure(false);
+  const [settingsOpened, { open: openSettings, close: closeSettings }] =
+    useDisclosure(false);
+  const [newChatOpened, { open: openNewChat, close: closeNewChat }] =
+    useDisclosure(false);
+
+  const closeModals = (e: KeyboardEvent) => {
+    e.preventDefault();
+    closeNewChat();
+    closeSettings();
+  };
 
   useHotkeys([
-    ['mod+N', openNewChat],
-    ['mod+S', openSettings],
-    ['mod+T', toggleColorScheme],
-    ['Escape', () => { closeNewChat(); closeSettings(); }],
+    ["mod+N", openNewChat],
+    ["mod+S", openSettings],
+    ["mod+T", toggleColorScheme],
+    ["Escape", closeModals],
   ]);
 
   // Retry aggressively while the sidecar backend is still starting up.
@@ -34,11 +60,12 @@ export default function App() {
     retry: 20,
     retryDelay: (attempt) => Math.min(500 * (attempt + 1), 3000),
   });
-  const { data: models, isLoading: modelsLoading } = trpc.chat.getModels.useQuery(undefined, {
-    retry: 10,
-    retryDelay: (attempt) => Math.min(500 * (attempt + 1), 3000),
-    enabled: !!appSettings,
-  });
+  const { data: models, isLoading: modelsLoading } =
+    trpc.chat.getModels.useQuery(undefined, {
+      retry: 10,
+      retryDelay: (attempt) => Math.min(500 * (attempt + 1), 3000),
+      enabled: !!appSettings,
+    });
 
   const [backendReady, setBackendReady] = useState(false);
 
@@ -66,7 +93,9 @@ export default function App() {
       <Center h="100vh">
         <Box ta="center">
           <Loader color="primary" size="lg" mb="md" />
-          <Text size="sm" c="dimmed">Starting {DEFAULT_APP_NAME}…</Text>
+          <Text size="sm" c="dimmed">
+            Starting {DEFAULT_APP_NAME}…
+          </Text>
         </Box>
       </Center>
     );
@@ -81,7 +110,7 @@ export default function App() {
   return (
     <AppShell
       header={{ height: 52 }}
-      navbar={{ width: 260, breakpoint: 'sm' }}
+      navbar={{ width: 260, breakpoint: "sm" }}
       padding={0}
     >
       <AppShell.Header>
@@ -101,13 +130,27 @@ export default function App() {
             </Text>
           </Group>
           <Group gap="xs">
-            <Tooltip label={colorScheme === 'dark' ? 'Light mode' : 'Dark mode'}>
-              <ActionIcon variant="subtle" onClick={() => toggleColorScheme()} aria-label="Toggle color scheme">
-                {colorScheme === 'dark' ? <IconSun size={18} /> : <IconMoon size={18} />}
+            <Tooltip
+              label={colorScheme === "dark" ? "Light mode" : "Dark mode"}
+            >
+              <ActionIcon
+                variant="subtle"
+                onClick={() => toggleColorScheme()}
+                aria-label="Toggle color scheme"
+              >
+                {colorScheme === "dark" ? (
+                  <IconSun size={18} />
+                ) : (
+                  <IconMoon size={18} />
+                )}
               </ActionIcon>
             </Tooltip>
             <Tooltip label="Settings">
-              <ActionIcon variant="subtle" onClick={openSettings} aria-label="Settings">
+              <ActionIcon
+                variant="subtle"
+                onClick={openSettings}
+                aria-label="Settings"
+              >
                 <IconSettings size={18} />
               </ActionIcon>
             </Tooltip>
@@ -130,7 +173,14 @@ export default function App() {
           {selectedChatId ? (
             <ChatView chatId={selectedChatId} />
           ) : (
-            <Box h="100%" style={{ display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+            <Box
+              h="100%"
+              style={{
+                display: "flex",
+                alignItems: "center",
+                justifyContent: "center",
+              }}
+            >
               <Text c="dimmed" size="lg">
                 Select a chat or create a new one
               </Text>

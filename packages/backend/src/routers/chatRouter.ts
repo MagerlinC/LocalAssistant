@@ -4,6 +4,7 @@ import * as chatService from '../services/chatService';
 import * as fileService from '../services/fileService';
 import { ollamaChat, ollamaListModels, ollamaPullModel, OllamaTool, OllamaChatMessage } from '../lib/ollama';
 import { webSearch } from '../lib/webSearch';
+import { generatePresentation } from '../lib/presentationGenerator';
 import {
   CreateChatSchema,
   UpdateChatSchema,
@@ -12,6 +13,7 @@ import {
   GetMessagesSchema,
   GetFilesSchema,
   DEFAULT_SYSTEM_PROMPT,
+  PresentationInputSchema,
 } from '@local-assistant/shared';
 import { observable } from '@trpc/server/observable';
 
@@ -32,6 +34,41 @@ const AGENT_TOOLS: OllamaTool[] = [
           },
         },
         required: ['query'],
+      },
+    },
+  },
+  {
+    type: 'function',
+    function: {
+      name: 'create_presentation',
+      description:
+        'Generate a PowerPoint presentation (.pptx) from structured slide data. Call this when the user asks for a presentation, wants slides, or asks to summarize content into a presentation.',
+      parameters: {
+        type: 'object',
+        properties: {
+          title: {
+            type: 'string',
+            description: 'The overall presentation title',
+          },
+          slides: {
+            type: 'array',
+            description: 'Array of slides (max 5 unless user specifies more)',
+            items: {
+              type: 'object',
+              properties: {
+                title: { type: 'string', description: 'Slide title' },
+                bullets: {
+                  type: 'array',
+                  description: 'Bullet points (max 5, each ≤ 10 words)',
+                  items: { type: 'string' },
+                },
+                notes: { type: 'string', description: 'Optional speaker notes' },
+              },
+              required: ['title', 'bullets'],
+            },
+          },
+        },
+        required: ['title', 'slides'],
       },
     },
   },
@@ -212,9 +249,10 @@ export const chatRouter = router({
     }))
     .subscription(({ input }) => {
       return observable<{
-        type: 'text' | 'done' | 'error' | 'status';
+        type: 'text' | 'done' | 'error' | 'status' | 'file';
         content?: string;
         error?: string;
+        filePath?: string;
       }>((emit) => {
         let cancelled = false;
         const abortController = new AbortController();
@@ -316,6 +354,32 @@ export const chatRouter = router({
                       : 'No results found.';
                   } catch (err) {
                     toolContent = `Search failed: ${err instanceof Error ? err.message : 'Unknown error'}`;
+                  }
+
+                  messages.push({ role: 'tool', content: toolContent });
+                } else if (call.function.name === 'create_presentation') {
+                  emit.next({ type: 'status', content: 'Generating presentation…' });
+
+                  let toolContent: string;
+                  try {
+                    const parsed = PresentationInputSchema.safeParse(call.function.arguments);
+                    if (!parsed.success) {
+                      toolContent = `Invalid presentation data: ${parsed.error.message}`;
+                    } else {
+                      // Enforce limits
+                      const input = {
+                        ...parsed.data,
+                        slides: parsed.data.slides.map((s: { title: string; bullets: string[]; notes?: string }) => ({
+                          ...s,
+                          bullets: s.bullets.slice(0, 5),
+                        })),
+                      };
+                      const filePath = await generatePresentation(input);
+                      emit.next({ type: 'file', filePath });
+                      toolContent = JSON.stringify({ filePath });
+                    }
+                  } catch (err) {
+                    toolContent = `Presentation generation failed: ${err instanceof Error ? err.message : 'Unknown error'}`;
                   }
 
                   messages.push({ role: 'tool', content: toolContent });

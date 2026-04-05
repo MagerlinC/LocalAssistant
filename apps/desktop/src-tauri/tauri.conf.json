@@ -16,7 +16,7 @@
       "all": false,
       "shell": {
         "all": false,
-        "open": true
+        "open": "^((https?://\\w+)|(mailto:\\w+)|(tel:\\w+)|(file://)).+"
       },
       "fs": {
         "all": false,

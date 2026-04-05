@@ -9,9 +9,10 @@ interface MessageInputProps {
   chatId: string;
   onStreamingChange: (content: string | null) => void;
   onPendingMessage: (msg: string | null) => void;
+  onPresentationReady?: (filePath: string) => void;
 }
 
-export default function MessageInput({ chatId, onStreamingChange, onPendingMessage }: MessageInputProps) {
+export default function MessageInput({ chatId, onStreamingChange, onPendingMessage, onPresentationReady }: MessageInputProps) {
   const [input, setInput] = useState('');
   const { isStreaming, setIsStreaming, isIndexing } = useApp();
   const utils = trpc.useUtils();
@@ -33,8 +34,10 @@ export default function MessageInput({ chatId, onStreamingChange, onPendingMessa
     const subscription = trpcClient.chat.sendMessage.subscribe(
       { chatId, content },
       {
-        onData(event: { type: string; content?: string; error?: string }) {
-          if (event.type === 'status') {
+        onData(event: { type: string; content?: string; error?: string; filePath?: string }) {
+          if (event.type === 'file') {
+            if (event.filePath) onPresentationReady?.(event.filePath);
+          } else if (event.type === 'status') {
             // Show tool-use status only while no text has arrived yet
             if (!streamingRef.current) {
               onStreamingChange(`\u{1F50D} ${event.content ?? ''}…`);

@@ -43,6 +43,9 @@ services:
       # Reach the host's Ollama instance. Override with a .env file on Linux.
       OLLAMA_URL: "${OLLAMA_URL:-http://host.docker.internal:11434}"
       SEARXNG_URL: "http://searxng:8080"
+      # The host-side path of the mounted data volume, so the backend can
+      # return file paths that are valid on the user's machine (not the container).
+      HOST_DATA_DIR: "${LOCAL_ASSISTANT_DATA:-$HOME/LocalAssistant}"
     volumes:
       # Persist the SQLite DB and indexed chat files on the host
       - "${LOCAL_ASSISTANT_DATA:-$HOME/LocalAssistant}:/root/LocalAssistant"

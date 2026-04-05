@@ -14,7 +14,7 @@ export interface OllamaTool {
     description: string;
     parameters: {
       type: 'object';
-      properties: Record<string, { type: string; description?: string }>;
+      properties: Record<string, unknown>;
       required?: string[];
     };
   };

@@ -33,7 +33,32 @@ export const GetMessagesSchema = z.object({
   chatId: z.string(),
 });
 
-export const DEFAULT_SYSTEM_PROMPT =
-  'You are a helpful offline AI assistant that helps analyze documents, emails, and office files. Be concise, accurate, and professional.';
+export const PresentationSlideSchema = z.object({
+  title: z.string(),
+  bullets: z.array(z.string()).max(5),
+  notes: z.string().optional(),
+});
+
+export const PresentationInputSchema = z.object({
+  title: z.string(),
+  slides: z.array(PresentationSlideSchema).min(1),
+});
+
+export type PresentationInput = z.infer<typeof PresentationInputSchema>;
+
+export const DEFAULT_SYSTEM_PROMPT = `You are a helpful offline AI assistant that helps analyze documents, emails, and office files. Be concise, accurate, and professional.
+
+PRESENTATION GENERATION:
+If the user asks for a presentation, asks to "summarize into slides", or the conversation clearly leads to a presentation output:
+1. Generate structured slide data and call the \`create_presentation\` tool — do NOT return slides as plain text.
+2. After the tool returns a filePath, tell the user their presentation is ready and mention the file path.
+
+Slide generation rules:
+- Max 5 slides unless explicitly asked for more
+- Max 5 bullets per slide
+- Each bullet must be ≤ 10 words
+- No paragraphs — bullets only
+- Professional tone
+- For long conversations: summarize key points first, then convert to slides`;
 
 export const DEFAULT_MODEL = 'qwen2.5:7b';
