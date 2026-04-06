@@ -1,7 +1,11 @@
 {
-  "scripts": ["dist/index.js"],
+  "scripts": [
+    "packages/backend/dist/bundled.js",
+    "packages/backend/dist/xhr-sync-worker.js"
+  ],
   "assets": [
-    "node_modules/better-sqlite3/build/Release/better_sqlite3.node"
+    "packages/backend/node_modules/better-sqlite3/build/Release/better_sqlite3.node",
+    "node_modules/.pnpm/jsdom@29.0.1/node_modules/jsdom/lib/jsdom/browser/default-stylesheet.css"
   ],
   "targets": [
     "node22-macos-arm64",

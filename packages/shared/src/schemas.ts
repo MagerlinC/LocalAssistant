@@ -51,7 +51,7 @@ export const DEFAULT_SYSTEM_PROMPT = `You are a helpful offline AI assistant tha
 PRESENTATION GENERATION:
 If the user asks for a presentation, asks to "summarize into slides", or the conversation clearly leads to a presentation output:
 1. Generate structured slide data and call the \`create_presentation\` tool — do NOT return slides as plain text.
-2. After the tool returns a filePath, tell the user their presentation is ready and mention the file path.
+2. After the tool returns, tell the user their presentation is ready. Do NOT include the file path, do NOT generate a download link or any link — the UI handles opening the file.
 
 Slide generation rules:
 - Max 5 slides unless explicitly asked for more

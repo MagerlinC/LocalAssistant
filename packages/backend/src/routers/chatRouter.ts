@@ -119,6 +119,13 @@ export const chatRouter = router({
     .input(GetFilesSchema)
     .query(({ input }) => fileService.getFiles(input.chatId)),
 
+  deleteFile: publicProcedure
+    .input(z.object({ fileId: z.string() }))
+    .mutation(({ input }) => {
+      fileService.deleteFile(input.fileId);
+      return { success: true };
+    }),
+
   getChatFilesDir: publicProcedure
     .input(GetFilesSchema)
     .query(({ input }) => ({
@@ -149,6 +156,17 @@ export const chatRouter = router({
       chatService.setSetting('defaultSystemPrompt', input.prompt);
       return { success: true };
     }),
+
+  getBackendDataDir: publicProcedure.query(() => {
+    return {
+      dataDir: process.env.DATA_DIR ?? '(not set)',
+      home: process.env.HOME ?? '(not set)',
+      user: process.env.USER ?? '(not set)',
+      isPkg: !!(process as any).pkg,
+      argv: process.argv.join(' | '),
+      chatsDirExample: fileService.getChatFilesDir('example-chat-id'),
+    };
+  }),
 
   getAppSettings: publicProcedure.query(() => {
     return {
@@ -215,6 +233,10 @@ export const chatRouter = router({
         totalFiles?: number;
         currentFile?: string;
         error?: string;
+        errors?: string[];
+        indexed?: number;
+        skipped?: number;
+        filesDir?: string;
       }>((emit) => {
         (async () => {
           try {
@@ -225,11 +247,11 @@ export const chatRouter = router({
               return;
             }
 
-            await fileService.indexChatFiles(chat.id, chat.model, (progress) => {
+            const result = await fileService.indexChatFiles(chat.id, chat.model, (progress) => {
               emit.next({ type: 'progress', ...progress });
             });
 
-            emit.next({ type: 'done' });
+            emit.next({ type: 'done', indexed: result.indexed, skipped: result.skipped, errors: result.errors, filesDir: result.filesDir });
             emit.complete();
           } catch (err) {
             emit.next({

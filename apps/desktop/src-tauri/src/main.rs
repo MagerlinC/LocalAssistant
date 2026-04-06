@@ -5,21 +5,30 @@ use std::net::TcpStream;
 use std::path::PathBuf;
 use std::sync::Mutex;
 use std::time::{Duration, Instant};
-use tauri::api::process::{Command, CommandChild};
+use std::collections::HashMap;
+use tauri::api::process::{Command, CommandChild, CommandEvent};
 use tauri::{Manager, State};
 
 // ── Managed state ─────────────────────────────────────────────────────────────
 
 struct ProcessManager {
-    backend: Mutex<Option<CommandChild>>,
-    ollama:  Mutex<Option<CommandChild>>,
+    backend:        Mutex<Option<CommandChild>>,
+    ollama:         Mutex<Option<CommandChild>>,
+    startup_errors: Mutex<Vec<String>>,
 }
 
 impl ProcessManager {
     fn new() -> Self {
         Self {
-            backend: Mutex::new(None),
-            ollama:  Mutex::new(None),
+            backend:        Mutex::new(None),
+            ollama:         Mutex::new(None),
+            startup_errors: Mutex::new(Vec::new()),
+        }
+    }
+
+    fn push_error(&self, msg: impl Into<String>) {
+        if let Ok(mut v) = self.startup_errors.lock() {
+            v.push(msg.into());
         }
     }
 
@@ -150,6 +159,15 @@ fn copy_files_to_chat(
     Ok(copied)
 }
 
+// ── Tauri commands ────────────────────────────────────────────────────────────
+
+#[tauri::command]
+fn get_startup_errors(state: State<ProcessManager>) -> Vec<String> {
+    state.startup_errors.lock()
+        .map(|v| v.clone())
+        .unwrap_or_default()
+}
+
 // ── main ──────────────────────────────────────────────────────────────────────
 
 fn main() {
@@ -159,6 +177,7 @@ fn main() {
             copy_files_to_chat,
             open_chat_folder,
             get_data_dir,
+            get_startup_errors,
         ])
         .setup(|_app| {
             // In debug builds (tauri dev) the Docker/npm backend is already
@@ -169,41 +188,81 @@ fn main() {
                 let data_dir_str = data_dir.to_string_lossy().into_owned();
                 let pm: State<ProcessManager> = _app.state();
 
-                // ── 1. Ollama ────────────────────────────────────────────
+                // ── 1. Ollama (fire-and-forget — does NOT block backend startup) ──
+                // Ollama and the backend are independent: the backend only needs
+                // Ollama when serving model requests, not at startup. Starting them
+                // in parallel cuts total startup time from ~20 s to ~1 s.
                 if !port_open(11434) {
                     match Command::new_sidecar("ollama") {
-                        Err(e) => eprintln!("[LocalAssistant] ollama sidecar not found: {e}"),
+                        Err(e) => {
+                            eprintln!("[LocalAssistant] ollama sidecar not found: {e}");
+                            pm.push_error(format!("Ollama sidecar missing ({e}). AI features will not work."));
+                        }
                         Ok(cmd) => match cmd.args(["serve"]).spawn() {
-                            Err(e) => eprintln!("[LocalAssistant] Failed to start ollama: {e}"),
-                            Ok((_rx, child)) => {
+                            Err(e) => {
+                                eprintln!("[LocalAssistant] Failed to start ollama: {e}");
+                                pm.push_error(format!("Ollama failed to start: {e}. AI features will not work."));
+                            }
+                            Ok((rx, child)) => {
                                 *pm.ollama.lock().unwrap() = Some(child);
-                                if !wait_for_port(11434, 15_000) {
-                                    eprintln!("[LocalAssistant] Ollama did not become ready in 15 s");
-                                }
+                                // Drain output in the background; Ollama readiness is
+                                // checked on-demand by the backend/frontend.
+                                std::thread::spawn(move || {
+                                    let mut rx = rx;
+                                    while let Some(event) = rx.blocking_recv() {
+                                        match event {
+                                            CommandEvent::Stderr(line) => eprintln!("[ollama] {line}"),
+                                            CommandEvent::Error(e) => eprintln!("[ollama error] {e}"),
+                                            CommandEvent::Terminated(p) => eprintln!("[ollama] exited: code={:?}", p.code),
+                                            _ => {}
+                                        }
+                                    }
+                                });
                             }
                         },
                     }
                 }
 
                 // ── 2. Backend ───────────────────────────────────────────
+                let backend_env: HashMap<String, String> = [
+                    ("PORT".into(), "3001".into()),
+                    ("DATA_DIR".into(), data_dir_str.clone()),
+                    ("OLLAMA_URL".into(), "http://localhost:11434".into()),
+                ].into_iter().collect();
                 match Command::new_sidecar("backend") {
-                    Err(e) => eprintln!("[LocalAssistant] backend sidecar not found: {e}"),
-                    Ok(cmd) => match cmd
-                        .env("PORT", "3001")
-                        .env("DATA_DIR", &data_dir_str)
-                        .env("OLLAMA_URL", "http://localhost:11434")
-                        .spawn()
-                    {
-                        Err(e) => eprintln!("[LocalAssistant] Failed to start backend: {e}"),
-                        Ok((_rx, child)) => {
+                    Err(e) => {
+                        eprintln!("[LocalAssistant] backend sidecar not found: {e}");
+                        pm.push_error(format!("Backend could not start: sidecar binary missing ({e})."));
+                    }
+                    Ok(cmd) => match cmd.envs(backend_env).args(["--data-dir", &data_dir_str]).spawn() {
+                        Err(e) => {
+                            eprintln!("[LocalAssistant] Failed to start backend: {e}");
+                            pm.push_error(format!("Backend could not start: {e}."));
+                        }
+                        Ok((rx, child)) => {
                             *pm.backend.lock().unwrap() = Some(child);
+                            std::thread::spawn(move || {
+                                let mut rx = rx;
+                                while let Some(event) = rx.blocking_recv() {
+                                    match event {
+                                        CommandEvent::Stdout(line) => eprintln!("[backend] {line}"),
+                                        CommandEvent::Stderr(line) => eprintln!("[backend] {line}"),
+                                        CommandEvent::Error(e) => eprintln!("[backend error] {e}"),
+                                        CommandEvent::Terminated(p) => eprintln!("[backend] exited: code={:?}", p.code),
+                                        _ => {}
+                                    }
+                                }
+                            });
                         }
                     },
                 }
 
-                // ── 3. Wait for backend ──────────────────────────────────
-                if !wait_for_port(3001, 20_000) {
-                    eprintln!("[LocalAssistant] Backend did not become ready in 20 s");
+                // ── 3. Wait for backend only ─────────────────────────────
+                // Ollama may still be starting in the background; that is fine.
+                // The window opens as soon as the backend is ready.
+                if !wait_for_port(3001, 30_000) {
+                    eprintln!("[LocalAssistant] Backend did not become ready in 30 s");
+                    pm.push_error("Backend did not start in time. Please quit and restart the app.");
                 }
             }
 

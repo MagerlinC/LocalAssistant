@@ -19,7 +19,6 @@ import {
   Badge,
   Progress,
   Tabs,
-  ColorInput,
 } from "@mantine/core";
 import {
   IconPlus,
@@ -82,8 +81,6 @@ export default function Sidebar({ settingsOpened, onCloseSettings, newChatOpened
     setAppName,
     avatarUrl,
     setAvatarUrl,
-    accentColor,
-    setAccentColor,
   } = useApp();
   const newChatOpen = newChatOpened;
   const openNewChat = onOpenNewChat;
@@ -95,7 +92,6 @@ export default function Sidebar({ settingsOpened, onCloseSettings, newChatOpened
   const [defaultPrompt, setDefaultPrompt] = useState("");
   const [draftName, setDraftName] = useState("");
   const [draftAvatar, setDraftAvatar] = useState("");
-  const [draftAccentColor, setDraftAccentColor] = useState("");
   const avatarInputRef = useRef<HTMLInputElement>(null);
 
   // Model pull state
@@ -121,7 +117,6 @@ export default function Sidebar({ settingsOpened, onCloseSettings, newChatOpened
     if (settingsOpen) {
       setDraftName(appName);
       setDraftAvatar(avatarUrl);
-      setDraftAccentColor(accentColor);
     } else {
       // Cancel any in-progress pull when modal closes
       pullUnsubRef.current?.unsubscribe();
@@ -162,7 +157,6 @@ export default function Sidebar({ settingsOpened, onCloseSettings, newChatOpened
     onSuccess: () => {
       setAppName(draftName);
       setAvatarUrl(draftAvatar);
-      setAccentColor(draftAccentColor);
       notifications.show({ color: "green", message: "Settings saved" });
       closeSettings();
     },
@@ -203,7 +197,7 @@ export default function Sidebar({ settingsOpened, onCloseSettings, newChatOpened
     setAppSettings.mutate({
       appName: draftName,
       avatarDataUrl: draftAvatar,
-      accentColor: draftAccentColor,
+      accentColor: '',
     });
   }
 
@@ -385,7 +379,6 @@ export default function Sidebar({ settingsOpened, onCloseSettings, newChatOpened
           <Tabs.List mb="md">
             <Tabs.Tab value="assistant">Assistant</Tabs.Tab>
             <Tabs.Tab value="models">Models</Tabs.Tab>
-            <Tabs.Tab value="appearance">Appearance</Tabs.Tab>
           </Tabs.List>
 
           {/* ── Assistant tab ── */}
@@ -483,35 +476,6 @@ export default function Sidebar({ settingsOpened, onCloseSettings, newChatOpened
                 loading={
                   setDefaultSystemPrompt.isPending || setAppSettings.isPending
                 }
-              >
-                Save
-              </Button>
-            </Stack>
-          </Tabs.Panel>
-
-          {/* ── Appearance tab ── */}
-          <Tabs.Panel value="appearance">
-            <Stack>
-              <Text size="sm" fw={600} c="dimmed">Accent color</Text>
-              <Text size="xs" c="dimmed">
-                Sets the primary color used throughout the app. Changes take
-                effect after saving.
-              </Text>
-              <ColorInput
-                label="Color"
-                value={draftAccentColor}
-                onChange={setDraftAccentColor}
-                format="hex"
-                swatches={[
-                  '#7950f2', '#e64980', '#f03e3e', '#e67700',
-                  '#2f9e44', '#0c8599', '#1971c2', '#6741d9',
-                ]}
-                swatchesPerRow={8}
-              />
-              <Button
-                onClick={handleSaveSettings}
-                loading={setAppSettings.isPending}
-                mt="xs"
               >
                 Save
               </Button>

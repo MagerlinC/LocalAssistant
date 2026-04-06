@@ -5,7 +5,23 @@ import fs from 'fs';
 
 function getDataDir(): string {
   if (process.env.DATA_DIR) return process.env.DATA_DIR;
-  // Fallback for dev: ~/LocalAssistant
+
+  // macOS: construct from USER env var (set by launchd even when HOME is not,
+  // which happens when Tauri's sidecar spawn doesn't inherit the full environment).
+  // This matches Tauri's app_data_dir() = ~/Library/Application Support/{bundleId}.
+  if (process.platform === 'darwin') {
+    const user = process.env.USER || process.env.LOGNAME;
+    if (user) {
+      return path.join('/Users', user, 'Library', 'Application Support', 'com.localassistant.app');
+    }
+  }
+
+  // Windows: use APPDATA which is typically inherited.
+  if (process.platform === 'win32' && process.env.APPDATA) {
+    return path.join(process.env.APPDATA, 'com.localassistant.app');
+  }
+
+  // Dev fallback (regular Node.js process with full environment).
   return path.join(os.homedir(), 'LocalAssistant');
 }
 
@@ -13,24 +29,23 @@ export function getDataDirPath(): string {
   return getDataDir();
 }
 
-const DATA_DIR = getDataDir();
-const DB_PATH = path.join(DATA_DIR, 'local-assistant.db');
-
-fs.mkdirSync(DATA_DIR, { recursive: true });
-
 let _db: Database.Database | null = null;
 
 export function getDb(): Database.Database {
   if (_db) return _db;
 
+  // Resolve DATA_DIR lazily so that process.env.DATA_DIR set from CLI args
+  // (or Tauri sidecar envs) is always picked up, regardless of module init order.
+  const dataDir = getDataDir();
+  const dbPath = path.join(dataDir, 'local-assistant.db');
+  fs.mkdirSync(dataDir, { recursive: true });
+
   const opts: Database.Options = {};
-  // When running as a pkg binary, the native binding is extracted to a temp dir.
-  // The startup code in index.ts sets this env var before getDb() is first called.
   if (process.env.BETTER_SQLITE3_NATIVE_BINDING) {
     opts.nativeBinding = process.env.BETTER_SQLITE3_NATIVE_BINDING;
   }
 
-  _db = new Database(DB_PATH, opts);
+  _db = new Database(dbPath, opts);
   _db.pragma('journal_mode = WAL');
   _db.pragma('foreign_keys = ON');
 
@@ -90,5 +105,3 @@ function initSchema(db: Database.Database) {
   `);
 }
 
-// Keep the old export name for backwards compat
-export const DATA_DIR_PATH = DATA_DIR;

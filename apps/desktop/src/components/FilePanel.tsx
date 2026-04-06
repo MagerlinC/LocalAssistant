@@ -3,7 +3,7 @@ import {
   Stack, Text, Button, Group, Badge, Card, ActionIcon,
   Tooltip, Loader, Box, Code, Progress,
 } from '@mantine/core';
-import { IconFile, IconRefresh, IconPlus } from '@tabler/icons-react';
+import { IconFile, IconRefresh, IconPlus, IconTrash } from '@tabler/icons-react';
 import { notifications } from '@mantine/notifications';
 import { trpc, trpcClient } from '../lib/trpc';
 import { useApp } from '../context/AppContext';
@@ -48,6 +48,15 @@ export default function FilePanel({ chatId }: FilePanelProps) {
   const utils = trpc.useUtils();
 
   const { data: files, isLoading, refetch } = trpc.chat.getFiles.useQuery({ chatId });
+  const deleteFile = trpc.chat.deleteFile.useMutation({
+    onSuccess: () => {
+      refetch();
+      utils.chat.getFiles.invalidate({ chatId });
+    },
+    onError: (err) => {
+      notifications.show({ color: 'red', title: 'Failed to remove file', message: err.message, autoClose: false });
+    },
+  });
 
   function startIndexing() {
     setIndexing(true);
@@ -72,14 +81,53 @@ export default function FilePanel({ chatId }: FilePanelProps) {
             utils.chat.getFiles.invalidate({ chatId });
 
             if (event.type === 'error') {
-              notifications.show({ color: 'red', message: `Indexing failed: ${event.error}` });
+              notifications.show({ color: 'red', title: 'Indexing failed', message: event.error ?? 'Unknown error', autoClose: false });
+            } else {
+              if (event.errors && event.errors.length > 0) {
+                for (const msg of event.errors) {
+                  notifications.show({ color: 'orange', title: 'File error', message: msg, autoClose: false });
+                }
+              }
+              const indexed = event.indexed ?? 0;
+              const skipped = event.skipped ?? 0;
+              if (indexed === 0 && skipped === 0) {
+                // Diagnostic: compare Tauri data dir vs backend data dir
+                Promise.all([
+                  isTauri
+                    ? import('@tauri-apps/api/tauri').then(({ invoke }) => invoke<string>('get_data_dir'))
+                    : Promise.resolve('(not Tauri)'),
+                  trpcClient.chat.getBackendDataDir.query(),
+                ]).then(([tauriDir, backendInfo]) => {
+                  notifications.show({
+                    color: 'yellow',
+                    title: 'No files found — path diagnostic',
+                    message: [
+                      `Tauri dir: ${tauriDir}`,
+                      `Backend DATA_DIR: ${backendInfo.dataDir}`,
+                      `HOME: ${backendInfo.home}  USER: ${backendInfo.user}`,
+                      `isPkg: ${backendInfo.isPkg}`,
+                      `argv: ${backendInfo.argv}`,
+                      `Scanned: ${backendInfo.chatsDirExample}`,
+                    ].join('\n'),
+                    autoClose: false,
+                  });
+                }).catch(() => {
+                  notifications.show({
+                    color: 'yellow',
+                    title: 'No files found',
+                    message: event.filesDir ?? 'Could not determine scan path',
+                    autoClose: false,
+                  });
+                });
+              }
             }
           }
         },
-        onError() {
+        onError(err) {
           setIndexing(false);
           setIsIndexing(false);
           setProgress(null);
+          notifications.show({ color: 'red', title: 'Indexing failed', message: String(err), autoClose: false });
         },
         onComplete() {
           setIndexing(false);
@@ -189,6 +237,17 @@ export default function FilePanel({ chatId }: FilePanelProps) {
                 </Text>
               </Box>
               <Badge size="xs" variant="light" color="green">indexed</Badge>
+              <Tooltip label="Remove file">
+                <ActionIcon
+                  variant="subtle"
+                  color="red"
+                  size="sm"
+                  loading={deleteFile.isPending}
+                  onClick={() => deleteFile.mutate({ fileId: file.id })}
+                >
+                  <IconTrash size={14} />
+                </ActionIcon>
+              </Tooltip>
             </Group>
           </Card>
         ))}

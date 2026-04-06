@@ -100,23 +100,39 @@ export async function ollamaChat(
   return collectedToolCalls ? { toolCalls: collectedToolCalls } : {};
 }
 
+function withTimeout<T>(promise: Promise<T>, ms: number, label: string): Promise<T> {
+  return Promise.race([
+    promise,
+    new Promise<never>((_, reject) =>
+      setTimeout(() => reject(new Error(`${label} timed out after ${ms / 1000}s`)), ms)
+    ),
+  ]);
+}
+
 export async function ollamaEmbed(
   model: string,
   text: string
 ): Promise<number[]> {
-  const response = await fetch(`${OLLAMA_BASE_URL}/api/embeddings`, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ model, prompt: text }),
-  });
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), 90_000);
+  try {
+    const response = await fetch(`${OLLAMA_BASE_URL}/api/embeddings`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ model, prompt: text }),
+      signal: controller.signal,
+    });
 
-  if (!response.ok) {
-    const err = await response.text();
-    throw new Error(`Ollama embed error: ${response.status} ${err}`);
+    if (!response.ok) {
+      const err = await response.text();
+      throw new Error(`Ollama embed error: ${response.status} ${err}`);
+    }
+
+    const data = (await response.json()) as { embedding: number[] };
+    return data.embedding;
+  } finally {
+    clearTimeout(timer);
   }
-
-  const data = (await response.json()) as { embedding: number[] };
-  return data.embedding;
 }
 
 export async function ollamaPullModel(
@@ -167,7 +183,9 @@ export async function ollamaPullModel(
 export async function ollamaListModels(): Promise<
   Array<{ name: string; size: number; digest: string; modified_at: string }>
 > {
-  const response = await fetch(`${OLLAMA_BASE_URL}/api/tags`);
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), 5_000);
+  const response = await fetch(`${OLLAMA_BASE_URL}/api/tags`, { signal: controller.signal }).finally(() => clearTimeout(timer));
   if (!response.ok) {
     throw new Error(`Ollama list models error: ${response.status}`);
   }

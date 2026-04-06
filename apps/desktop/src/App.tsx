@@ -11,6 +11,7 @@ import {
   Loader,
   Tooltip,
 } from "@mantine/core";
+import { notifications } from "@mantine/notifications";
 import { useDisclosure, useHotkeys } from "@mantine/hooks";
 import {
   IconSun,
@@ -32,7 +33,6 @@ export default function App() {
     appName,
     setAppName,
     setAvatarUrl,
-    setAccentColor,
     setupComplete,
     setSetupComplete,
   } = useApp();
@@ -56,39 +56,87 @@ export default function App() {
   ]);
 
   // Retry aggressively while the sidecar backend is still starting up.
-  const { data: appSettings } = trpc.chat.getAppSettings.useQuery(undefined, {
-    retry: 20,
-    retryDelay: (attempt) => Math.min(500 * (attempt + 1), 3000),
-  });
-  const { data: models, isLoading: modelsLoading } =
-    trpc.chat.getModels.useQuery(undefined, {
-      retry: 10,
+  const { data: appSettings, isError: settingsError, error: settingsQueryError } =
+    trpc.chat.getAppSettings.useQuery(undefined, {
+      retry: 20,
       retryDelay: (attempt) => Math.min(500 * (attempt + 1), 3000),
+    });
+  const { data: models } =
+    trpc.chat.getModels.useQuery(undefined, {
       enabled: !!appSettings,
+      refetchInterval: 5000,
     });
 
+  useEffect(() => {
+    if (settingsQueryError) {
+      notifications.show({
+        color: "red",
+        title: "Backend connection failed",
+        message: settingsQueryError.message,
+        autoClose: false,
+      });
+    }
+  }, [settingsQueryError]);
+
   const [backendReady, setBackendReady] = useState(false);
+
+  // Poll startup errors from the Tauri sidecar launcher via a command.
+  // Using a command (not events) avoids the race where events fire before
+  // the JS listener is registered.
+  useEffect(() => {
+    const isTauri = typeof window !== "undefined" && "__TAURI__" in window;
+    if (!isTauri) return;
+    import("@tauri-apps/api/tauri").then(({ invoke }) => {
+      invoke<string[]>("get_startup_errors").then((errors) => {
+        for (const msg of errors) {
+          notifications.show({
+            color: "red",
+            title: "Startup error",
+            message: msg,
+            autoClose: false,
+          });
+        }
+      });
+    });
+  }, []);
 
   useEffect(() => {
     if (appSettings !== undefined) {
       setBackendReady(true);
       setAppName(appSettings.appName);
       setAvatarUrl(appSettings.avatarDataUrl);
-      if (appSettings.accentColor) setAccentColor(appSettings.accentColor);
+      // If the user already completed setup (has a saved name), don't show
+      // the wizard again just because Ollama is still starting.
+      if (appSettings.appName) setSetupComplete(true);
     }
-  }, [appSettings, setAppName, setAvatarUrl]);
+  }, [appSettings, setAppName, setAvatarUrl, setSetupComplete]);
 
   useEffect(() => {
     if (models !== undefined && !setupComplete) {
       if (models.length > 0) setSetupComplete(true);
-      // models.length === 0 → SetupWizard renders
+      // models.length === 0 && no saved appName → first run, show SetupWizard
     }
   }, [models, setupComplete, setSetupComplete]);
 
   const displayName = appName.trim() || DEFAULT_APP_NAME;
 
   // ── Startup: waiting for sidecar backend ──────────────────────────────────
-  if (!backendReady || modelsLoading) {
+  if (settingsError) {
+    return (
+      <Center h="100vh">
+        <Box ta="center">
+          <Text size="lg" fw={600} c="red" mb="xs">
+            Failed to start backend
+          </Text>
+          <Text size="sm" c="dimmed">
+            Please quit and restart {DEFAULT_APP_NAME}.
+          </Text>
+        </Box>
+      </Center>
+    );
+  }
+
+  if (!backendReady) {
     return (
       <Center h="100vh">
         <Box ta="center">

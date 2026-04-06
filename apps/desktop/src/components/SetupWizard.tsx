@@ -98,11 +98,21 @@ export default function SetupWizard() {
             );
             setTimeout(() => setSetupComplete(true), 1200);
           } else if (event.type === 'error') {
-            setPullError(event.error ?? 'Unknown error');
+            const msg = event.error ?? 'Unknown error';
+            if (msg.includes('fetch failed') || msg.includes('ECONNREFUSED') || msg.includes('Load failed')) {
+              setPullError('Could not connect to Ollama. It may still be starting — please wait a moment and try again.');
+            } else {
+              setPullError(msg);
+            }
           }
         },
         onError(err) {
-          setPullError(String(err));
+          const msg = String(err);
+          if (msg.includes('fetch failed') || msg.includes('ECONNREFUSED') || msg.includes('Load failed')) {
+            setPullError('Could not connect to Ollama. It may still be starting — please wait a moment and try again.');
+          } else {
+            setPullError(msg);
+          }
         },
       }
     );

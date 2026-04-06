@@ -20,20 +20,25 @@ const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const TAURI_BIN = path.resolve(__dirname, '..', 'apps', 'desktop', 'src-tauri', 'bin');
 
 // Pin to a tested release. Update this when upgrading Ollama.
-const OLLAMA_VERSION = 'v0.9.0';
+const OLLAMA_VERSION = 'v0.20.2';
 
+// macOS ships as ollama-darwin.tgz containing the `ollama` universal binary.
+// Windows ships as a plain .exe.
 const PLATFORMS = {
   'darwin-arm64': {
-    url: `https://github.com/ollama/ollama/releases/download/${OLLAMA_VERSION}/ollama-darwin`,
+    url: `https://github.com/ollama/ollama/releases/download/${OLLAMA_VERSION}/ollama-darwin.tgz`,
     tauriName: 'ollama-aarch64-apple-darwin',
+    extract: 'tgz', // extract `ollama` binary from the archive
   },
   'darwin-x64': {
-    url: `https://github.com/ollama/ollama/releases/download/${OLLAMA_VERSION}/ollama-darwin`,
+    url: `https://github.com/ollama/ollama/releases/download/${OLLAMA_VERSION}/ollama-darwin.tgz`,
     tauriName: 'ollama-x86_64-apple-darwin',
+    extract: 'tgz',
   },
   'win32-x64': {
     url: `https://github.com/ollama/ollama/releases/download/${OLLAMA_VERSION}/ollama-windows-amd64.exe`,
     tauriName: 'ollama-x86_64-pc-windows-msvc.exe',
+    extract: null,
   },
 };
 
@@ -67,7 +72,15 @@ for (const key of keys) {
   console.log(`  URL : ${entry.url}`);
   console.log(`  Dest: ${dest}`);
 
-  if (os.platform() === 'win32') {
+  if (entry.extract === 'tgz') {
+    // Download the tgz to a temp file then extract just the `ollama` binary.
+    const tmp = dest + '.tgz';
+    execSync(`curl -L --progress-bar "${entry.url}" -o "${tmp}"`, { stdio: 'inherit' });
+    execSync(`tar -xzf "${tmp}" -C "${TAURI_BIN}" ollama`, { stdio: 'inherit' });
+    fs.renameSync(path.join(TAURI_BIN, 'ollama'), dest);
+    fs.rmSync(tmp);
+    fs.chmodSync(dest, 0o755);
+  } else if (os.platform() === 'win32') {
     execSync(
       `powershell -Command "Invoke-WebRequest -Uri '${entry.url}' -OutFile '${dest}'"`,
       { stdio: 'inherit' }

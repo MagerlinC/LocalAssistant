@@ -8,12 +8,34 @@ import { ollamaEmbed, vectorToBuffer, bufferToVector, cosineSimilarity } from '.
 import { log } from '../lib/logger';
 import type { FileRecord } from '@local-assistant/shared';
 
-const BASE_DIR = process.env.DATA_DIR
-  ? path.join(process.env.DATA_DIR, 'chats')
-  : path.join(os.homedir(), 'LocalAssistant', 'chats');
+function withTimeout<T>(promise: Promise<T>, ms: number, label: string): Promise<T> {
+  return Promise.race([
+    promise,
+    new Promise<never>((_, reject) =>
+      setTimeout(() => reject(new Error(`${label} timed out after ${ms / 1000}s`)), ms)
+    ),
+  ]);
+}
+
+function getBaseDir(): string {
+  if (process.env.DATA_DIR) return path.join(process.env.DATA_DIR, 'chats');
+
+  if (process.platform === 'darwin') {
+    const user = process.env.USER || process.env.LOGNAME;
+    if (user) {
+      return path.join('/Users', user, 'Library', 'Application Support', 'com.localassistant.app', 'chats');
+    }
+  }
+
+  if (process.platform === 'win32' && process.env.APPDATA) {
+    return path.join(process.env.APPDATA, 'com.localassistant.app', 'chats');
+  }
+
+  return path.join(os.homedir(), 'LocalAssistant', 'chats');
+}
 
 export function getChatFilesDir(chatId: string): string {
-  return path.join(BASE_DIR, chatId, 'files');
+  return path.join(getBaseDir(), chatId, 'files');
 }
 
 export function ensureChatDir(chatId: string): void {
@@ -38,6 +60,16 @@ function mapFile(row: DbFile): FileRecord {
   };
 }
 
+export function deleteFile(fileId: string): void {
+  const db = getDb();
+  const row = db.prepare(`SELECT path FROM files WHERE id = ?`).get(fileId) as { path: string } | undefined;
+  if (!row) throw new Error(`File not found: ${fileId}`);
+  // Remove from disk (ignore if already gone)
+  try { fs.unlinkSync(row.path); } catch {}
+  // Cascade deletes chunks + embeddings via FK constraints
+  db.prepare(`DELETE FROM files WHERE id = ?`).run(fileId);
+}
+
 export function getFiles(chatId: string): FileRecord[] {
   const db = getDb();
   const rows = db
@@ -56,7 +88,7 @@ export async function indexChatFiles(
   chatId: string,
   embedModel: string,
   onProgress?: IndexingProgressCallback
-): Promise<{ indexed: number; skipped: number; errors: string[] }> {
+): Promise<{ indexed: number; skipped: number; errors: string[]; filesDir: string }> {
   const db = getDb();
   const filesDir = getChatFilesDir(chatId);
   ensureChatDir(chatId);
@@ -110,7 +142,7 @@ export async function indexChatFiles(
     let chunks: string[];
     try {
       log.info(`Extracting text from: ${fileName}`);
-      const text = await extractText(filePath);
+      const text = await withTimeout(extractText(filePath), 30_000, `extractText(${fileName})`);
       chunks = chunkText(text);
       log.info(`Extracted ${chunks.length} chunk(s) from: ${fileName}`);
     } catch (err) {
@@ -154,7 +186,7 @@ export async function indexChatFiles(
   }
 
   log.info(`Indexing complete: ${indexed} indexed, ${skipped} skipped, ${errors.length} error(s)`);
-  return { indexed, skipped, errors };
+  return { indexed, skipped, errors, filesDir };
 }
 
 export async function retrieveRelevantChunks(

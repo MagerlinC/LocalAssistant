@@ -14,8 +14,6 @@ interface AppContextValue {
   setAppName: (name: string) => void;
   avatarUrl: string;
   setAvatarUrl: (url: string) => void;
-  accentColor: string;
-  setAccentColor: (color: string) => void;
   setupComplete: boolean;
   setSetupComplete: (v: boolean) => void;
 }
@@ -29,7 +27,6 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
   const [currentChat, setCurrentChat] = useState<Chat | null>(null);
   const [appName, setAppName] = useState('');
   const [avatarUrl, setAvatarUrl] = useState('');
-  const [accentColor, setAccentColor] = useState('');
   const [setupComplete, setSetupComplete] = useState(false);
 
   const handleSetSelectedChatId = useCallback((id: string | null) => {
@@ -52,8 +49,6 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
         setAppName,
         avatarUrl,
         setAvatarUrl,
-        accentColor,
-        setAccentColor,
         setupComplete,
         setSetupComplete,
       }}

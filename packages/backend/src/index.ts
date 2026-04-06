@@ -8,6 +8,13 @@ import fs from 'fs';
 // the snapshot virtual FS.  dlopen() needs a real filesystem path, so we copy
 // it out to $TMPDIR on first launch.
 if ((process as any).pkg) {
+  // Read --data-dir CLI arg as a fallback in case Tauri's envs() doesn't
+  // propagate env vars to the sidecar on some platforms.
+  const dataDirIdx = process.argv.indexOf('--data-dir');
+  if (dataDirIdx !== -1 && process.argv[dataDirIdx + 1]) {
+    process.env.DATA_DIR = process.argv[dataDirIdx + 1];
+  }
+
   try {
     const bindingDir = path.join(os.tmpdir(), 'localassistant-native');
     fs.mkdirSync(bindingDir, { recursive: true });

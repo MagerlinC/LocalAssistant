@@ -1,18 +1,14 @@
-import React, { useMemo } from 'react';
+import React from 'react';
 import ReactDOM from 'react-dom/client';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { MantineProvider, createTheme } from '@mantine/core';
-import { generateColors } from '@mantine/colors-generator';
 import { Notifications } from '@mantine/notifications';
 import '@mantine/core/styles.css';
 import '@mantine/notifications/styles.css';
 import './App.css';
 import App from './App';
 import { trpc, trpcClient } from './lib/trpc';
-import { AppProvider, useApp } from './context/AppContext';
-
-// Mantine's built-in violet[6] — used when no accent has been saved yet.
-const DEFAULT_ACCENT = '#7950f2';
+import { AppProvider } from './context/AppContext';
 
 const queryClient = new QueryClient({
   defaultOptions: {
@@ -20,39 +16,36 @@ const queryClient = new QueryClient({
   },
 });
 
-/**
- * Reads accentColor from AppContext and rebuilds the Mantine theme around it.
- * Must live inside AppProvider so it can call useApp().
- */
-function ThemeWrapper({ children }: { children: React.ReactNode }) {
-  const { accentColor } = useApp();
+// Pearl Frost — soft periwinkle-lavender, 10 shades light → dark
+const pearlColors: [string, string, string, string, string, string, string, string, string, string] = [
+  '#f3f5ff',
+  '#e6e9ff',
+  '#cdd3ff',
+  '#b0baf8',
+  '#939eee',
+  '#7986d8',
+  '#6272ca',
+  '#5162bb',
+  '#4354ac',
+  '#35469c',
+];
 
-  const theme = useMemo(() => {
-    const hex = accentColor || DEFAULT_ACCENT;
-    return createTheme({
-      primaryColor: 'accent',
-      colors: { accent: generateColors(hex) },
-      fontFamily: 'system-ui, sans-serif',
-      defaultRadius: 'md',
-    });
-  }, [accentColor]);
-
-  return (
-    <MantineProvider theme={theme} defaultColorScheme="dark">
-      <Notifications />
-      {children}
-    </MantineProvider>
-  );
-}
+const theme = createTheme({
+  primaryColor: 'pearl',
+  colors: { pearl: pearlColors },
+  fontFamily: 'system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif',
+  defaultRadius: 'lg',
+});
 
 ReactDOM.createRoot(document.getElementById('root')!).render(
   <React.StrictMode>
     <trpc.Provider client={trpcClient} queryClient={queryClient}>
       <QueryClientProvider client={queryClient}>
         <AppProvider>
-          <ThemeWrapper>
+          <MantineProvider theme={theme} defaultColorScheme="dark">
+            <Notifications />
             <App />
-          </ThemeWrapper>
+          </MantineProvider>
         </AppProvider>
       </QueryClientProvider>
     </trpc.Provider>
